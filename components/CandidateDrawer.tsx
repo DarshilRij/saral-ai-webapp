@@ -290,6 +290,10 @@ export default function CandidateDrawer({
     );
   };
 
+  const candidateId = (candidate as any)?.id
+    ? String((candidate as any).id)
+    : null;
+
   // fetch basic profile when candidate.id changes
   useEffect(() => {
     let cancelled = false;
@@ -314,13 +318,12 @@ export default function CandidateDrawer({
       }
     };
 
-    if (candidate && (candidate as any).id) {
-      doFetch(String((candidate as any).id));
+    if (candidateId) {
+      doFetch(candidateId);
     } else {
       setProfileData(null);
     }
 
-    // NEW: reset insights when candidate changes
     setSaralData(null);
     setSaralError(null);
     setSaralLoading(false);
@@ -329,7 +332,7 @@ export default function CandidateDrawer({
     return () => {
       cancelled = true;
     };
-  }, [candidate]);
+  }, [candidateId]);
 
   // contact unlock flow (unchanged)
   const handleUnlockClick = () => {
