@@ -40,7 +40,7 @@ type TabKey = "DETAILS" | "INSIGHTS" | "CONTACT";
 
 function parseDurationToMonths(durationStr: string): number {
   if (!durationStr) return 0;
-  const s = String(durationStr).toLowerCase();
+  const s = String(durationStr).toLowerCase().trim();
   let years = 0,
     months = 0;
   const yMatch = s.match(/(\d+)\s*year/);
@@ -49,8 +49,9 @@ function parseDurationToMonths(durationStr: string): number {
   if (mMatch) months = parseInt(mMatch[1], 10);
   if (years || months) return years * 12 + months;
 
+  // Handle range: "Jan 2022 - Mar 2024" or "Jan 2022 - Present"
   const rangeMatch = s.match(
-    /([a-z]{3,}\s*\d{4})\s*-\s*([a-z]{3,}\s*\d{4}|present)/i
+    /([a-z]{3,}\s*\d{4})\s*-\s*([a-z]{3,}\s*\d{4}|present)?/i
   );
   if (rangeMatch) {
     const parseMonthYear = (t: string) => {
@@ -64,10 +65,16 @@ function parseDurationToMonths(durationStr: string): number {
       return null;
     };
     const start = parseMonthYear(rangeMatch[1]);
-    const end =
-      rangeMatch[2].toLowerCase() === "present"
-        ? { year: new Date().getFullYear(), monthIndex: new Date().getMonth() }
-        : parseMonthYear(rangeMatch[2]);
+    let end;
+    if (!rangeMatch[2] || rangeMatch[2].toLowerCase() === "present") {
+      // If end date is missing or "present", use current date
+      end = {
+        year: new Date().getFullYear(),
+        monthIndex: new Date().getMonth(),
+      };
+    } else {
+      end = parseMonthYear(rangeMatch[2]);
+    }
     if (start && end) {
       const monthsBetween =
         (end.year - start.year) * 12 + (end.monthIndex - start.monthIndex) + 1;
@@ -75,8 +82,23 @@ function parseDurationToMonths(durationStr: string): number {
     }
   }
 
-  const num = s.match(/(\d+)/);
-  if (num) return parseInt(num[1], 10);
+  // Handle single date like "Jan 2024"
+  const singleDateMatch = s.match(/^([a-z]{3,})\s*(\d{4})$/i);
+  if (singleDateMatch) {
+    // If only a start date is present, calculate months till today
+    const month = singleDateMatch[1].slice(0, 3);
+    const year = parseInt(singleDateMatch[2], 10);
+    const startDate = new Date(`${month} 1, ${year}`);
+    const endDate = new Date();
+    // Calculate months difference
+    let months =
+      (endDate.getFullYear() - startDate.getFullYear()) * 12 +
+      (endDate.getMonth() - startDate.getMonth()) +
+      1;
+    return Math.max(0, months);
+  }
+
+  // Fallback: do not treat year as months
   return 0;
 }
 
@@ -166,7 +188,7 @@ export default function CandidateDrawer({
     const trajectory =
       Array.isArray(profExp) && profExp.length
         ? profExp.map((exp: any) => {
-            const duration =
+            let duration =
               exp.duration ??
               exp.duration_display ??
               exp.duration_text ??
@@ -174,6 +196,14 @@ export default function CandidateDrawer({
               exp.company_and_dates ??
               exp.caption ??
               "";
+
+            // If only start_date is present, build duration string for parseDurationToMonths
+            if (!duration && exp.start_date?.year) {
+              duration = `${exp.start_date?.month ?? ""} ${
+                exp.start_date?.year
+              }`;
+            }
+
             const months = parseDurationToMonths(duration);
             return {
               role: exp.job_title ?? exp.title ?? exp.role ?? "—",
