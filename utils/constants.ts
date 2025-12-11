@@ -1,7 +1,14 @@
 // utils/avatar.ts
 const pastelColors = [
-  "#FCE7F3", "#E0F2FE", "#E0FBEA", "#FFF7E6", "#F3E8FF",
-  "#FFEFEF", "#F0FDF4", "#F5F3FF", "#E3F2FD",
+  "#FCE7F3",
+  "#E0F2FE",
+  "#E0FBEA",
+  "#FFF7E6",
+  "#F3E8FF",
+  "#FFEFEF",
+  "#F0FDF4",
+  "#F5F3FF",
+  "#E3F2FD",
 ];
 
 const pickColor = (name?: string | null) => {
@@ -52,3 +59,25 @@ export const defaultAvatarBase64 = (name?: string | null, size = 128) => {
 
   return `data:image/svg+xml;base64,${base64}`;
 };
+
+const SKILL_BADGE_CLASSES = [
+  "bg-indigo-50 text-indigo-700 border-indigo-100",
+  "bg-sky-50 text-sky-700 border-sky-100",
+  "bg-emerald-50 text-emerald-700 border-emerald-100",
+  "bg-amber-50 text-amber-700 border-amber-100",
+  "bg-rose-50 text-rose-700 border-rose-100",
+  "bg-violet-50 text-violet-700 border-violet-100",
+  "bg-teal-50 text-teal-700 border-teal-100",
+];
+
+function getSkillBadgeClass(skill: string): string {
+  let hash = 0;
+  for (let i = 0; i < skill.length; i++) {
+    hash = (hash << 5) - hash + skill.charCodeAt(i);
+    hash |= 0; // convert to 32-bit int
+  }
+  const idx = Math.abs(hash) % SKILL_BADGE_CLASSES.length;
+  return SKILL_BADGE_CLASSES[idx];
+}
+
+export { getSkillBadgeClass };
