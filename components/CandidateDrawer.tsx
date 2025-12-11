@@ -19,7 +19,7 @@ import {
   Star,
 } from "lucide-react";
 import { Candidate } from "../types";
-import { defaultAvatarBase64 } from "@/utils/constants";
+import { defaultAvatarBase64, getSkillBadgeClass } from "@/utils/constants";
 import {
   fetchContactInfo,
   fetchProfileById,
@@ -653,10 +653,12 @@ export default function CandidateDrawer({
                         .length > 0
                     ? (profileData?.data?.skills ?? candidate.skills ?? [])
                         .slice(0, 12)
-                        .map((s: string, i: number) => (
+                        .map((s: string) => (
                           <span
-                            key={i}
-                            className="text-xs px-3 py-1 rounded-full bg-[#F3F4F6] text-[#374151] border border-[#E5E7EB]"
+                            key={s}
+                            className={`text-xs px-3 py-1 rounded-full border ${getSkillBadgeClass(
+                              s
+                            )}`}
                           >
                             {s}
                           </span>
@@ -664,10 +666,12 @@ export default function CandidateDrawer({
                     : (raw?.experience ?? [])
                         .flatMap((e: any) => e.skills ?? [])
                         .slice(0, 12)
-                        .map((s: string, i: number) => (
+                        .map((s: string) => (
                           <span
-                            key={i}
-                            className="text-xs px-3 py-1 rounded-full bg-[#F3F4F6] text-[#374151] border border-[#E5E7EB]"
+                            key={s}
+                            className={`text-xs px-3 py-1 rounded-full border ${getSkillBadgeClass(
+                              s
+                            )}`}
                           >
                             {s}
                           </span>
@@ -899,6 +903,25 @@ export default function CandidateDrawer({
                     </div>
                     <div className="text-sm text-[#374151]">
                       {insights.careerVerdict}
+                    </div>
+                  </div>
+
+                  {/* Alternate roles (from best_fit_roles) */}
+                  <div className="mb-6">
+                    <h4 className="text-xs font-bold text-[#111827] uppercase tracking-widest mb-3">
+                      Alternate role suggestions
+                    </h4>
+                    <div className="flex flex-wrap gap-2">
+                      {alternateRoles.map((r: string, i: number) => (
+                        <span
+                          key={i}
+                          className={`text-xs px-3 py-1 rounded-full border ${getSkillBadgeClass(
+                            r
+                          )}`}
+                        >
+                          {r}
+                        </span>
+                      ))}
                     </div>
                   </div>
 
