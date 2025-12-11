@@ -1162,23 +1162,6 @@ export default function CandidateDrawer({
                       </div>
                     </div>
                   </div>
-
-                  {/* Alternate roles (from best_fit_roles) */}
-                  <div className="mb-6">
-                    <h4 className="text-xs font-bold text-[#111827] uppercase tracking-widest mb-3">
-                      Alternate role suggestions
-                    </h4>
-                    <div className="flex flex-wrap gap-2">
-                      {alternateRoles.map((r: string, i: number) => (
-                        <span
-                          key={i}
-                          className="text-xs px-3 py-1 rounded-full bg-white border border-[#E5E7EB] text-[#374151]"
-                        >
-                          {r}
-                        </span>
-                      ))}
-                    </div>
-                  </div>
                 </>
               )}
             </section>
