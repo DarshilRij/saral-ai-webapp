@@ -864,7 +864,7 @@ export default function CandidateDrawer({
                         SARAL Insights
                       </div>
                       <div className="text-sm text-[#6B7280]">
-                        Career trajectory, strengths & areas to probe
+                        Career trajectory, strengths & Red Flags
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
@@ -903,7 +903,7 @@ export default function CandidateDrawer({
 
                     <div className="bg-orange-50/50 rounded-xl p-5 border border-orange-100">
                       <div className="text-xs font-bold text-[#D97706] uppercase tracking-wide mb-3 flex items-center gap-2">
-                        <AlertCircle className="w-4 h-4" /> Areas to Probe
+                        <AlertCircle className="w-4 h-4" /> Red Flags
                       </div>
                       <ul className="space-y-2">
                         {(insights.redFlags || []).map(
