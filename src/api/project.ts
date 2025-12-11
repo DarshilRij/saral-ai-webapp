@@ -6,7 +6,7 @@ export async function exportProjects(prompt: string): Promise<any> {
     },
     body: JSON.stringify({
       query: prompt,
-      limit: 50,
+      limit: 15,
     }),
   });
   if (!resp.ok) {
