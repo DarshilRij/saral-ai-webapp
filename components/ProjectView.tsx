@@ -221,58 +221,114 @@ export const ProjectView: React.FC<ProjectViewProps> = ({
       }
     }, 1500);
 
+    let pollInterval: NodeJS.Timeout | null = null;
+
     try {
-      // call your local API from the screenshot
-      const resp = await searchCandidates(prompt);
+      // 1️⃣ START SEARCH (async job)
+      const startResp = await fetch(`${process.env.API_BASE}/api/search`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          query: prompt,
+          limit: 15,
+        }),
+      });
 
-      if (!resp.ok) {
-        throw new Error(`Search API error: ${resp.status} ${resp.statusText}`);
+      if (!startResp.ok) {
+        throw new Error(`Search start failed: ${startResp.status}`);
       }
 
-      const json = await resp.json();
+      const startJson = await startResp.json();
+      const sessionId = startJson?.session_id;
 
-      // defensive: the sample response nests results under data.results
-      const hits =
-        json?.data?.results ??
-        json?.results ??
-        json?.data ??
-        (Array.isArray(json) ? json : []);
+      if (!sessionId) {
+        throw new Error("No session_id returned from search API");
+      }
 
-      const mapped: Candidate[] = Array.isArray(hits)
-        ? hits.map(mapApiResultToCandidate)
-        : [];
-
-      clearInterval(stepInterval);
-
-      // determine queryRole: use metadata.query_role or parsed_query.job_title or fallback to prompt/currentProject
-      const queryRole =
-        json?.data?.metadata?.query_role ??
-        json?.data?.metadata?.parsed_query?.job_title ??
-        json?.data?.metadata?.parsed_query?.job_title ??
-        currentProject?.name ??
-        prompt?.slice(0, 80) ??
-        "search";
-
-      // persist via parent if provided (Dashboard will handle localStorage & project creation)
-      if (typeof onSaveSearch === "function") {
+      // 2️⃣ POLL STATUS
+      pollInterval = setInterval(async () => {
         try {
-          onSaveSearch(queryRole, mapped);
-        } catch (err) {
-          console.warn("onSaveSearch failed:", err);
-        }
-      }
+          const statusResp = await fetch(
+            `${process.env.API_BASE}/api/search/status/${sessionId}`
+          );
 
-      // small delay to preserve loading animation feel (optional)
-      setTimeout(() => {
-        setCandidates(mapped);
-        setLoading(false);
-        setLoadingStep(loadingSteps.length - 1);
-        // reset pagination
-        setCurrentPage(1);
-      }, 400); // reduced delay since we call a real API
+          if (!statusResp.ok) {
+            throw new Error("Status polling failed");
+          }
+
+          const statusJson = await statusResp.json();
+
+          // update progress if backend sends it
+          if (typeof statusJson.progress === "number") {
+            setLoadingStep(
+              Math.min(
+                loadingSteps.length - 1,
+                Math.floor((statusJson.progress / 100) * loadingSteps.length)
+              )
+            );
+          }
+
+          if (statusJson.status === "FAILED") {
+            throw new Error("Search failed on server");
+          }
+
+          // 3️⃣ COMPLETED → FETCH RESULTS
+          if (statusJson.status === "COMPLETED") {
+            if (pollInterval) clearInterval(pollInterval);
+            clearInterval(stepInterval);
+
+            const resultResp = await fetch(
+              `${process.env.API_BASE}/api/search/result/${sessionId}`
+            );
+
+            if (!resultResp.ok) {
+              throw new Error("Failed to fetch search results");
+            }
+
+            const resultJson = await resultResp.json();
+
+            const hits = resultJson?.data?.results ?? resultJson?.results ?? [];
+
+            const mapped: Candidate[] = Array.isArray(hits)
+              ? hits.map(mapApiResultToCandidate)
+              : [];
+
+            // 🔑 role name resolution (your logic preserved)
+            const queryRole =
+              resultJson?.data?.metadata?.query_role ??
+              resultJson?.data?.metadata?.parsed_query?.job_title ??
+              currentProject?.name ??
+              prompt?.slice(0, 80) ??
+              "search";
+
+            // 4️⃣ PERSIST ONLY WHEN COMPLETED
+            if (typeof onSaveSearch === "function") {
+              try {
+                onSaveSearch(queryRole, mapped);
+              } catch (err) {
+                console.warn("onSaveSearch failed:", err);
+              }
+            }
+
+            // small UX delay
+            setTimeout(() => {
+              setCandidates(mapped);
+              setLoading(false);
+              setLoadingStep(loadingSteps.length - 1);
+              setCurrentPage(1);
+            }, 400);
+          }
+        } catch (err) {
+          console.error("Polling error:", err);
+          if (pollInterval) clearInterval(pollInterval);
+          clearInterval(stepInterval);
+          setLoading(false);
+        }
+      }, 2500); // ⏱ poll every 2.5s
     } catch (e) {
       console.error("handleSearch error:", e);
       clearInterval(stepInterval);
+      if (pollInterval) clearInterval(pollInterval);
       setLoading(false);
     }
   };
