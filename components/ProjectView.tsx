@@ -240,14 +240,33 @@ export const ProjectView: React.FC<ProjectViewProps> = ({
         ? hits.map(mapApiResultToCandidate)
         : [];
 
-      // ensure interval cleared even if mapping is fast
       clearInterval(stepInterval);
+
+      // determine queryRole: use metadata.query_role or parsed_query.job_title or fallback to prompt/currentProject
+      const queryRole =
+        json?.data?.metadata?.query_role ??
+        json?.data?.metadata?.parsed_query?.job_title ??
+        json?.data?.metadata?.parsed_query?.job_title ??
+        currentProject?.name ??
+        prompt?.slice(0, 80) ??
+        "search";
+
+      // persist via parent if provided (Dashboard will handle localStorage & project creation)
+      if (typeof onSaveSearch === "function") {
+        try {
+          onSaveSearch(queryRole, mapped);
+        } catch (err) {
+          console.warn("onSaveSearch failed:", err);
+        }
+      }
 
       // small delay to preserve loading animation feel (optional)
       setTimeout(() => {
         setCandidates(mapped);
         setLoading(false);
         setLoadingStep(loadingSteps.length - 1);
+        // reset pagination
+        setCurrentPage(1);
       }, 400); // reduced delay since we call a real API
     } catch (e) {
       console.error("handleSearch error:", e);
