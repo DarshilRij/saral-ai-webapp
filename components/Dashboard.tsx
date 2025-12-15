@@ -124,12 +124,24 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
       };
       setProjects([...projects, newProj]);
       setCurrentProjectId(newProj.id);
-      setActiveTab(DashboardTab.SEARCH);
-      setCandidates([]); // Reset for new project
-      setNewProjectName("");
-      setNewProjectDesc("");
-      setCreatingProject(false);
-    }, 800);
+
+  // Load data for a project (using its name as role key)
+  const loadProjectFromStorage = (projectId: string) => {
+    const proj = projects.find((p) => p.id === projectId);
+    if (!proj) {
+      setCandidates([]);
+      setShortlistedIds([]);
+      return;
+    }
+    const loaded = loadRoleData(proj.name);
+    if (loaded) {
+      setCandidates(loaded.candidates ?? []);
+      setShortlistedIds(loaded.shortlistedIds ?? []);
+    } else {
+      // nothing saved yet for this role
+      setCandidates([]);
+      setShortlistedIds([]);
+    }
   };
 
   // toggleShortlist now persists shortlist per-role/project
