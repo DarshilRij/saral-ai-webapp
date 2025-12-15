@@ -450,8 +450,8 @@ export const ProjectView: React.FC<ProjectViewProps> = ({
 
         <div className="flex flex-wrap justify-center gap-3">
           {[
-            "Senior React Native Dev",
-            "Growth Marketing Manager",
+            "React Native Dev with 2 years of experience in ahmedabad",
+            "Video editor with 2 years of experience in surat",
             "Golang Engineer in Berlin",
           ].map((tag) => (
             <button
