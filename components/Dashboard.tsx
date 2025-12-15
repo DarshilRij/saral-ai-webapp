@@ -262,8 +262,12 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
       {/* Sidebar */}
       <aside className="w-64 bg-white border-r border-[#E5E7EB] flex flex-col flex-shrink-0 z-20">
         <div className="h-16 flex items-center px-6 border-b border-[#E5E7EB]">
-          <div className="w-6 h-6 bg-[#4338CA] rounded-md mr-3 flex items-center justify-center shadow-md shadow-[#4338CA]/20">
-            <div className="w-2.5 h-2.5 bg-white rounded-sm"></div>
+          <div className="w-6 h-6 mr-3 flex items-center justify-center">
+            <img
+              src="/assets/logo/saral-logo.svg"
+              alt="Saral AI Logo"
+              className="h-10 w-auto"
+            />
           </div>
           <span className="font-bold tracking-tight text-[#111827]">
             SARAL AI

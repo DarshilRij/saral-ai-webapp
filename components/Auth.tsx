@@ -276,8 +276,12 @@ export const Auth: React.FC<AuthProps & { defaultMode?: Mode }> = ({
       <div className="w-full max-w-[440px] relative z-10">
         {/* Brand */}
         <div className="mb-10 text-center">
-          <div className="w-12 h-12 bg-[#4338CA] rounded-2xl mx-auto mb-5 shadow-xl shadow-[#4338CA]/20 flex items-center justify-center">
-            <div className="w-5 h-5 bg-white rounded-md"></div>
+          <div className="w-12 h-12 mx-auto mb-5 flex items-center justify-center">
+            <img
+              src="/assets/logo/saral-logo.svg"
+              alt="Saral AI Logo"
+              className="h-10 w-auto"
+            />
           </div>
           <h1 className="text-3xl font-bold text-[#111827] tracking-tight">
             SARAL AI
