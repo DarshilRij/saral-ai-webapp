@@ -110,12 +110,28 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
   const currentProject =
     projects.find((p) => p.id === currentProjectId) || null;
 
-  const handleCreateProject = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newProjectName) return;
-    setCreatingProject(true);
-    setTimeout(() => {
-      const newProj = {
+  const storageKeyForRole = (roleName: string) =>
+    `role:${roleName.replace(/\s+/g, "_").toLowerCase()}`;
+
+  const saveRoleData = (
+    roleName: string,
+    candidatesToSave: Candidate[],
+    shortlistToSave: string[] = []
+  ) => {
+    try {
+      const payload = {
+        candidates: candidatesToSave,
+        shortlistedIds: shortlistToSave,
+        savedAt: new Date().toISOString(),
+      };
+      localStorage.setItem(
+        storageKeyForRole(roleName),
+        JSON.stringify(payload)
+      );
+    } catch (err) {
+      console.warn("saveRoleData failed", err);
+    }
+  };
         id: Date.now().toString(),
         name: newProjectName,
         description: newProjectDesc,
