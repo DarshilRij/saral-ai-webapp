@@ -672,7 +672,7 @@ export const ProjectView: React.FC<ProjectViewProps> = ({
             onClick={() => {
               setCandidates([]);
               setPrompt("");
-              confirmSearch();
+              setViewMode("search");
             }}
             className="h-9 px-4 rounded-lg bg-[#111827] text-white text-sm font-medium hover:bg-[#312E81] transition-colors shadow-sm"
           >
