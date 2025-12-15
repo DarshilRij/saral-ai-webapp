@@ -1,4 +1,4 @@
-export async function exportProjects(prompt: string): Promise<any> {
+export async function searchCandidates(prompt: string): Promise<any> {
   const resp = await fetch(`${process.env.API_BASE}/api/search`, {
     method: "POST",
     headers: {

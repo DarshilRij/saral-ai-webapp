@@ -34,7 +34,7 @@ import { Candidate, Project, Sequence } from "../types";
 import { generateCandidates } from "../services/geminiService";
 import { SequenceBuilder } from "./SequenceBuilder";
 import { defaultAvatarBase64 } from "@/utils/constants";
-import { exportProjects } from "@/src/api/project";
+import { searchCandidates } from "@/src/api/project";
 
 interface ProjectViewProps {
   candidates: Candidate[];
@@ -45,6 +45,7 @@ interface ProjectViewProps {
   shortlistedIds: string[];
   sequences: Sequence[];
   onAddSequence: (s: Sequence) => void;
+  onSaveSearch?: (queryRole: string, candidates: Candidate[]) => void;
 }
 
 interface FilterState {
@@ -65,6 +66,7 @@ export const ProjectView: React.FC<ProjectViewProps> = ({
   shortlistedIds,
   sequences,
   onAddSequence,
+  onSaveSearch,
 }) => {
   const [prompt, setPrompt] = useState("");
   const [loading, setLoading] = useState(false);
@@ -221,7 +223,7 @@ export const ProjectView: React.FC<ProjectViewProps> = ({
 
     try {
       // call your local API from the screenshot
-      const resp = await exportProjects(prompt);
+      const resp = await searchCandidates(prompt);
 
       if (!resp.ok) {
         throw new Error(`Search API error: ${resp.status} ${resp.statusText}`);
@@ -240,14 +242,33 @@ export const ProjectView: React.FC<ProjectViewProps> = ({
         ? hits.map(mapApiResultToCandidate)
         : [];
 
-      // ensure interval cleared even if mapping is fast
       clearInterval(stepInterval);
+
+      // determine queryRole: use metadata.query_role or parsed_query.job_title or fallback to prompt/currentProject
+      const queryRole =
+        json?.data?.metadata?.query_role ??
+        json?.data?.metadata?.parsed_query?.job_title ??
+        json?.data?.metadata?.parsed_query?.job_title ??
+        currentProject?.name ??
+        prompt?.slice(0, 80) ??
+        "search";
+
+      // persist via parent if provided (Dashboard will handle localStorage & project creation)
+      if (typeof onSaveSearch === "function") {
+        try {
+          onSaveSearch(queryRole, mapped);
+        } catch (err) {
+          console.warn("onSaveSearch failed:", err);
+        }
+      }
 
       // small delay to preserve loading animation feel (optional)
       setTimeout(() => {
         setCandidates(mapped);
         setLoading(false);
         setLoadingStep(loadingSteps.length - 1);
+        // reset pagination
+        setCurrentPage(1);
       }, 400); // reduced delay since we call a real API
     } catch (e) {
       console.error("handleSearch error:", e);
@@ -450,8 +471,8 @@ export const ProjectView: React.FC<ProjectViewProps> = ({
 
         <div className="flex flex-wrap justify-center gap-3">
           {[
-            "Senior React Native Dev",
-            "Growth Marketing Manager",
+            "React Native Dev with 2 years of experience in ahmedabad",
+            "Video editor with 2 years of experience in surat",
             "Golang Engineer in Berlin",
           ].map((tag) => (
             <button
@@ -672,7 +693,7 @@ export const ProjectView: React.FC<ProjectViewProps> = ({
             onClick={() => {
               setCandidates([]);
               setPrompt("");
-              confirmSearch();
+              setViewMode("search");
             }}
             className="h-9 px-4 rounded-lg bg-[#111827] text-white text-sm font-medium hover:bg-[#312E81] transition-colors shadow-sm"
           >

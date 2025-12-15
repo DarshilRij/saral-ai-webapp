@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Layout,
   Plus,
@@ -53,51 +53,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
   const [currentUser, setCurrentUser] = useState<User>(user);
 
   // Sequence State
-  const [sequences, setSequences] = useState<Sequence[]>([
-    {
-      id: "1",
-      name: "Frontend Engineers Outreach",
-      type: "EMAIL",
-      status: "ACTIVE",
-      stats: { sent: 342, opened: 156, replied: 42 },
-      lastUpdated: new Date(),
-      steps: [
-        {
-          id: "s1",
-          type: "EMAIL",
-          subject: "Opportunity at {{company}}",
-          content: "Hi {{firstName}}...",
-          delayDays: 0,
-        },
-        { id: "s2", type: "WAIT", delayDays: 2 },
-        {
-          id: "s3",
-          type: "EMAIL",
-          subject: "Quick follow up",
-          content: "Just checking in...",
-          delayDays: 0,
-        },
-      ],
-    },
-    {
-      id: "2",
-      name: "Passive Candidates Drip",
-      type: "EMAIL",
-      status: "DRAFT",
-      stats: { sent: 0, opened: 0, replied: 0 },
-      lastUpdated: new Date(),
-      steps: [
-        {
-          id: "s1",
-          type: "EMAIL",
-          subject: "Hello",
-          content: "...",
-          delayDays: 0,
-        },
-      ],
-    },
-  ]);
-
+  const [sequences, setSequences] = useState<Sequence[]>([]);
   const [newProjectName, setNewProjectName] = useState("");
   const [newProjectDesc, setNewProjectDesc] = useState("");
   const [creatingProject, setCreatingProject] = useState(false);
@@ -110,29 +66,126 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
   const currentProject =
     projects.find((p) => p.id === currentProjectId) || null;
 
-  const handleCreateProject = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newProjectName) return;
-    setCreatingProject(true);
-    setTimeout(() => {
-      const newProj = {
-        id: Date.now().toString(),
-        name: newProjectName,
-        description: newProjectDesc,
-        candidateCount: 0,
-        createdAt: new Date(),
+  const storageKeyForRole = (roleName: string) =>
+    `role:${roleName.replace(/\s+/g, "_").toLowerCase()}`;
+
+  const saveRoleData = (
+    roleName: string,
+    candidatesToSave: Candidate[],
+    shortlistToSave: string[] = []
+  ) => {
+    try {
+      const payload = {
+        candidates: candidatesToSave,
+        shortlistedIds: shortlistToSave,
+        savedAt: new Date().toISOString(),
       };
-      setProjects([...projects, newProj]);
-      setCurrentProjectId(newProj.id);
-      setActiveTab(DashboardTab.SEARCH);
-      setCandidates([]); // Reset for new project
-      setNewProjectName("");
-      setNewProjectDesc("");
-      setCreatingProject(false);
-    }, 800);
+      localStorage.setItem(
+        storageKeyForRole(roleName),
+        JSON.stringify(payload)
+      );
+    } catch (err) {
+      console.warn("saveRoleData failed", err);
+    }
   };
 
-  // Unlock candidate: deduct credits and mark contactUnlocked
+  const loadRoleData = (roleName: string) => {
+    try {
+      const raw = localStorage.getItem(storageKeyForRole(roleName));
+      if (!raw) return null;
+      return JSON.parse(raw) as {
+        candidates: Candidate[];
+        shortlistedIds: string[];
+        savedAt?: string;
+      };
+    } catch (err) {
+      console.warn("loadRoleData failed", err);
+      return null;
+    }
+  };
+
+  // Called when ProjectView finishes a search and wants the parent to persist/create project
+  const handleSaveSearch = (
+    queryRole: string,
+    candidatesFromSearch: Candidate[]
+  ) => {
+    // Normalize role name
+    const roleName = String(queryRole).trim();
+
+    // find existing project with same name
+    const existing = projects.find((p) => p.name === roleName);
+
+    if (existing) {
+      // update existing project's candidateCount & persist
+      const updatedProjects = projects.map((p) =>
+        p.id === existing.id
+          ? { ...p, candidateCount: candidatesFromSearch.length }
+          : p
+      );
+      setProjects(updatedProjects);
+      setCurrentProjectId(existing.id);
+    } else {
+      // create a new project from this role
+      const newProj: Project = {
+        id: Date.now().toString(),
+        name: roleName,
+        description: `Saved from search: ${roleName}`,
+        candidateCount: candidatesFromSearch.length,
+        createdAt: new Date(),
+      };
+      setProjects((prev) => [newProj, ...prev]);
+      setCurrentProjectId(newProj.id);
+    }
+
+    // Persist to localStorage keyed by roleName
+    // Keep any existing shortlist for this role if present, otherwise empty
+    const loaded = loadRoleData(roleName);
+    const shortlistToSave = loaded?.shortlistedIds ?? [];
+    saveRoleData(roleName, candidatesFromSearch, shortlistToSave);
+
+    // Update UI state
+    setCandidates(candidatesFromSearch);
+    setShortlistedIds(shortlistToSave);
+    setActiveTab(DashboardTab.SEARCH);
+  };
+
+  // Load data for a project (using its name as role key)
+  const loadProjectFromStorage = (projectId: string) => {
+    const proj = projects.find((p) => p.id === projectId);
+    if (!proj) {
+      setCandidates([]);
+      setShortlistedIds([]);
+      return;
+    }
+    const loaded = loadRoleData(proj.name);
+    if (loaded) {
+      setCandidates(loaded.candidates ?? []);
+      setShortlistedIds(loaded.shortlistedIds ?? []);
+    } else {
+      // nothing saved yet for this role
+      setCandidates([]);
+      setShortlistedIds([]);
+    }
+  };
+
+  // toggleShortlist now persists shortlist per-role/project
+  const toggleShortlist = (id: string) => {
+    setShortlistedIds((prev) => {
+      const next = prev.includes(id)
+        ? prev.filter((x) => x !== id)
+        : [...prev, id];
+
+      // persist for current project (if one exists)
+      if (currentProject?.name) {
+        // update saved candidates count as well (not necessary but helpful)
+        saveRoleData(currentProject.name, candidates, next);
+      }
+
+      return next;
+    });
+  };
+
+  // Unlock / other handlers unchanged (keeps previous behavior)
   const handleUnlockCandidate = (
     id: string,
     contact?: { emails?: string[]; phones?: string[] }
@@ -167,6 +220,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
         ...prev,
         credits: Math.max(0, prev.credits - 5),
       }));
+
+      // persist unlocked info for current role
+      if (currentProject?.name) {
+        saveRoleData(currentProject.name, candidates, shortlistedIds);
+      }
     } else {
       alert("Not enough credits to unlock contact details.");
     }
@@ -176,17 +234,28 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
     setSequences([newSeq, ...sequences]);
   };
 
-  const toggleShortlist = (id: string) => {
-    setShortlistedIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-    );
-  };
-
   const handleSaveProfile = (e: React.FormEvent) => {
     e.preventDefault();
     setCurrentUser({ ...currentUser, companyName: editCompanyName });
     setIsProfileModalOpen(false);
   };
+
+  // When sidebar project is clicked, load its data
+  useEffect(() => {
+    // Load data for the currently selected project on mount & when projects/currentProjectId change
+    if (currentProjectId) {
+      loadProjectFromStorage(currentProjectId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentProjectId, projects]);
+
+  // initial load for default project on first mount
+  useEffect(() => {
+    if (currentProject) {
+      loadProjectFromStorage(currentProject.id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
     <div className="flex h-screen bg-[#F7F8FA] overflow-hidden font-sans text-[#111827]">
@@ -343,6 +412,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
             shortlistedIds={shortlistedIds}
             sequences={sequences}
             onAddSequence={handleAddSequence}
+            onSaveSearch={handleSaveSearch}
           />
         )}
         {activeTab === DashboardTab.CREDITS && (
