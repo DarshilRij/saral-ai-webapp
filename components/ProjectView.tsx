@@ -34,7 +34,7 @@ import { Candidate, Project, Sequence } from "../types";
 import { generateCandidates } from "../services/geminiService";
 import { SequenceBuilder } from "./SequenceBuilder";
 import { defaultAvatarBase64 } from "@/utils/constants";
-import { exportProjects } from "@/src/api/project";
+import { searchCandidates } from "@/src/api/project";
 
 interface ProjectViewProps {
   candidates: Candidate[];
@@ -45,6 +45,7 @@ interface ProjectViewProps {
   shortlistedIds: string[];
   sequences: Sequence[];
   onAddSequence: (s: Sequence) => void;
+  onSaveSearch?: (queryRole: string, candidates: Candidate[]) => void;
 }
 
 interface FilterState {
@@ -65,6 +66,7 @@ export const ProjectView: React.FC<ProjectViewProps> = ({
   shortlistedIds,
   sequences,
   onAddSequence,
+  onSaveSearch,
 }) => {
   const [prompt, setPrompt] = useState("");
   const [loading, setLoading] = useState(false);
