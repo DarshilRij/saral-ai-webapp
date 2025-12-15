@@ -132,7 +132,24 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
     }, 800);
   };
 
-  // Unlock candidate: deduct credits and mark contactUnlocked
+  // toggleShortlist now persists shortlist per-role/project
+  const toggleShortlist = (id: string) => {
+    setShortlistedIds((prev) => {
+      const next = prev.includes(id)
+        ? prev.filter((x) => x !== id)
+        : [...prev, id];
+
+      // persist for current project (if one exists)
+      if (currentProject?.name) {
+        // update saved candidates count as well (not necessary but helpful)
+        saveRoleData(currentProject.name, candidates, next);
+      }
+
+      return next;
+    });
+  };
+
+  // Unlock / other handlers unchanged (keeps previous behavior)
   const handleUnlockCandidate = (
     id: string,
     contact?: { emails?: string[]; phones?: string[] }
@@ -167,6 +184,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
         ...prev,
         credits: Math.max(0, prev.credits - 5),
       }));
+
+      // persist unlocked info for current role
+      if (currentProject?.name) {
+        saveRoleData(currentProject.name, candidates, shortlistedIds);
+      }
     } else {
       alert("Not enough credits to unlock contact details.");
     }
@@ -174,12 +196,6 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
 
   const handleAddSequence = (newSeq: Sequence) => {
     setSequences([newSeq, ...sequences]);
-  };
-
-  const toggleShortlist = (id: string) => {
-    setShortlistedIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]
-    );
   };
 
   const handleSaveProfile = (e: React.FormEvent) => {
