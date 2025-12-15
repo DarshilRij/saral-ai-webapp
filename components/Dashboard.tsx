@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useEffect, useState } from "react";
 import {
   Layout,
   Plus,
@@ -53,51 +53,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
   const [currentUser, setCurrentUser] = useState<User>(user);
 
   // Sequence State
-  const [sequences, setSequences] = useState<Sequence[]>([
-    {
-      id: "1",
-      name: "Frontend Engineers Outreach",
-      type: "EMAIL",
-      status: "ACTIVE",
-      stats: { sent: 342, opened: 156, replied: 42 },
-      lastUpdated: new Date(),
-      steps: [
-        {
-          id: "s1",
-          type: "EMAIL",
-          subject: "Opportunity at {{company}}",
-          content: "Hi {{firstName}}...",
-          delayDays: 0,
-        },
-        { id: "s2", type: "WAIT", delayDays: 2 },
-        {
-          id: "s3",
-          type: "EMAIL",
-          subject: "Quick follow up",
-          content: "Just checking in...",
-          delayDays: 0,
-        },
-      ],
-    },
-    {
-      id: "2",
-      name: "Passive Candidates Drip",
-      type: "EMAIL",
-      status: "DRAFT",
-      stats: { sent: 0, opened: 0, replied: 0 },
-      lastUpdated: new Date(),
-      steps: [
-        {
-          id: "s1",
-          type: "EMAIL",
-          subject: "Hello",
-          content: "...",
-          delayDays: 0,
-        },
-      ],
-    },
-  ]);
-
+  const [sequences, setSequences] = useState<Sequence[]>([]);
   const [newProjectName, setNewProjectName] = useState("");
   const [newProjectDesc, setNewProjectDesc] = useState("");
   const [creatingProject, setCreatingProject] = useState(false);
@@ -456,6 +412,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
             shortlistedIds={shortlistedIds}
             sequences={sequences}
             onAddSequence={handleAddSequence}
+            onSaveSearch={handleSaveSearch}
           />
         )}
         {activeTab === DashboardTab.CREDITS && (
