@@ -132,14 +132,66 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
       console.warn("saveRoleData failed", err);
     }
   };
+
+  const loadRoleData = (roleName: string) => {
+    try {
+      const raw = localStorage.getItem(storageKeyForRole(roleName));
+      if (!raw) return null;
+      return JSON.parse(raw) as {
+        candidates: Candidate[];
+        shortlistedIds: string[];
+        savedAt?: string;
+      };
+    } catch (err) {
+      console.warn("loadRoleData failed", err);
+      return null;
+    }
+  };
+
+  // Called when ProjectView finishes a search and wants the parent to persist/create project
+  const handleSaveSearch = (
+    queryRole: string,
+    candidatesFromSearch: Candidate[]
+  ) => {
+    // Normalize role name
+    const roleName = String(queryRole).trim();
+
+    // find existing project with same name
+    const existing = projects.find((p) => p.name === roleName);
+
+    if (existing) {
+      // update existing project's candidateCount & persist
+      const updatedProjects = projects.map((p) =>
+        p.id === existing.id
+          ? { ...p, candidateCount: candidatesFromSearch.length }
+          : p
+      );
+      setProjects(updatedProjects);
+      setCurrentProjectId(existing.id);
+    } else {
+      // create a new project from this role
+      const newProj: Project = {
         id: Date.now().toString(),
-        name: newProjectName,
-        description: newProjectDesc,
-        candidateCount: 0,
+        name: roleName,
+        description: `Saved from search: ${roleName}`,
+        candidateCount: candidatesFromSearch.length,
         createdAt: new Date(),
       };
-      setProjects([...projects, newProj]);
+      setProjects((prev) => [newProj, ...prev]);
       setCurrentProjectId(newProj.id);
+    }
+
+    // Persist to localStorage keyed by roleName
+    // Keep any existing shortlist for this role if present, otherwise empty
+    const loaded = loadRoleData(roleName);
+    const shortlistToSave = loaded?.shortlistedIds ?? [];
+    saveRoleData(roleName, candidatesFromSearch, shortlistToSave);
+
+    // Update UI state
+    setCandidates(candidatesFromSearch);
+    setShortlistedIds(shortlistToSave);
+    setActiveTab(DashboardTab.SEARCH);
+  };
 
   // Load data for a project (using its name as role key)
   const loadProjectFromStorage = (projectId: string) => {
