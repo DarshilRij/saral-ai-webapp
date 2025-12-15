@@ -188,6 +188,23 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
     setIsProfileModalOpen(false);
   };
 
+  // When sidebar project is clicked, load its data
+  useEffect(() => {
+    // Load data for the currently selected project on mount & when projects/currentProjectId change
+    if (currentProjectId) {
+      loadProjectFromStorage(currentProjectId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentProjectId, projects]);
+
+  // initial load for default project on first mount
+  useEffect(() => {
+    if (currentProject) {
+      loadProjectFromStorage(currentProject.id);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <div className="flex h-screen bg-[#F7F8FA] overflow-hidden font-sans text-[#111827]">
       {/* Sidebar */}
