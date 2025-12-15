@@ -221,7 +221,7 @@ export const ProjectView: React.FC<ProjectViewProps> = ({
 
     try {
       // call your local API from the screenshot
-      const resp = await exportProjects(prompt);
+      const resp = await searchCandidates(prompt);
 
       if (!resp.ok) {
         throw new Error(`Search API error: ${resp.status} ${resp.statusText}`);
