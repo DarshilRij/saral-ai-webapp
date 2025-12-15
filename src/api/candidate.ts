@@ -52,10 +52,9 @@ export async function fetchProfileById(id: string) {
 }
 
 /** existing contact helper kept here for convenience */
-export async function fetchContactInfo(linkedinUrl: string) {
-  return apiRequest<ContactInfoResponse>("/api/contact-info", {
+export async function fetchContactInfo(candidateId: string) {
+  return apiRequest<ContactInfoResponse>(`/api/contact-info/${candidateId}`, {
     method: "POST",
-    body: { linkedin_url: linkedinUrl },
   });
 }
 

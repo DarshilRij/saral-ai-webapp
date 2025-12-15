@@ -377,17 +377,16 @@ export default function CandidateDrawer({
     if (!candidate) return;
     setUnlocking(true);
     try {
-      const linkedinUrl = resolveLinkedin();
-      if (!linkedinUrl) {
+      if (!candidateId) {
         onUnlock(candidate.id, undefined);
         setShowUnlockConfirm(false);
         alert(
-          "No LinkedIn URL available. Credits used but contact not fetched."
+          "No candidate ID available. Credits used but contact not fetched."
         );
         return;
       }
 
-      const resp = await fetchContactInfo(linkedinUrl);
+      const resp = await fetchContactInfo(candidateId);
       if (!resp?.success) {
         onUnlock(candidate.id, undefined);
         alert("Failed to fetch contact info: " + (resp?.message ?? "unknown"));
