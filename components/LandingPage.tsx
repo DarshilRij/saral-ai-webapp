@@ -23,7 +23,12 @@ export const LandingPage: React.FC = () => {
       <nav className="fixed w-full z-50 bg-white/80 backdrop-blur-md border-b border-[#E5E7EB]">
         <div className="max-w-6xl mx-auto px-6 h-16 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="w-5 h-5 bg-[#4338CA] rounded-sm"></div>
+            <img
+              src="/assets/logo/saral-logo.svg"
+              alt="Saral AI Logo"
+              className="h-10 w-auto"
+            />
+
             <span className="font-semibold tracking-tight text-lg">
               SARAL AI
             </span>
@@ -200,7 +205,11 @@ export const LandingPage: React.FC = () => {
         <div className="max-w-6xl mx-auto px-6 flex flex-col md:flex-row justify-between items-center gap-8">
           <div>
             <div className="flex items-center gap-2 mb-4">
-              <div className="w-5 h-5 bg-[#4338CA] rounded-sm"></div>
+              <img
+                src="/assets/logo/saral-logo.svg"
+                alt="Saral AI Logo"
+                className="h-10 w-auto"
+              />
               <span className="font-semibold tracking-tight text-lg">
                 SARAL AI
               </span>
