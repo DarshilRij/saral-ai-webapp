@@ -64,12 +64,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
   const saveRoleData = (
     roleName: string,
     candidatesToSave: Candidate[],
-    shortlistToSave: string[] = []
+    shortlistToSave: string[] = [],
+    prompt?: string
   ) => {
     try {
       const payload = {
         candidates: candidatesToSave,
         shortlistedIds: shortlistToSave,
+        prompt,
         savedAt: new Date().toISOString(),
       };
       localStorage.setItem(
@@ -88,6 +90,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
       return JSON.parse(raw) as {
         candidates: Candidate[];
         shortlistedIds: string[];
+        prompt?: string;
         savedAt?: string;
       };
     } catch (err) {
@@ -99,7 +102,8 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
   // Called when ProjectView finishes a search and wants the parent to persist/create project
   const handleSaveSearch = (
     queryRole: string,
-    candidatesFromSearch: Candidate[]
+    candidatesFromSearch: Candidate[],
+    prompt: string
   ) => {
     // Normalize role name
     const roleName = String(queryRole).trim();
@@ -111,9 +115,14 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
       // update existing project's candidateCount & persist
       const updatedProjects = projects.map((p) =>
         p.id === existing.id
-          ? { ...p, candidateCount: candidatesFromSearch.length }
+          ? {
+              ...p,
+              candidateCount: candidatesFromSearch.length,
+              prompt,
+            }
           : p
       );
+
       setProjects(updatedProjects);
       setCurrentProjectId(existing.id);
     } else {
@@ -124,6 +133,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
         description: `Saved from search: ${roleName}`,
         candidateCount: candidatesFromSearch.length,
         createdAt: new Date(),
+        prompt,
       };
       setProjects((prev) => [newProj, ...prev]);
       setCurrentProjectId(newProj.id);
@@ -133,7 +143,7 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
     // Keep any existing shortlist for this role if present, otherwise empty
     const loaded = loadRoleData(roleName);
     const shortlistToSave = loaded?.shortlistedIds ?? [];
-    saveRoleData(roleName, candidatesFromSearch, shortlistToSave);
+    saveRoleData(roleName, candidatesFromSearch, shortlistToSave, prompt);
 
     // Update UI state
     setCandidates(candidatesFromSearch);
@@ -153,6 +163,11 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
     if (loaded) {
       setCandidates(loaded.candidates ?? []);
       setShortlistedIds(loaded.shortlistedIds ?? []);
+      setProjects((prev) =>
+        prev.map((p) =>
+          p.name === proj.name ? { ...p, prompt: loaded.prompt } : p
+        )
+      );
     } else {
       // nothing saved yet for this role
       setCandidates([]);
@@ -272,33 +287,53 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
               <h3 className="text-[11px] font-bold text-[#6B7280] uppercase tracking-wider mb-3 px-3">
                 Projects
               </h3>
-              <ul className="space-y-1">
-                {projects.map((p) => (
-                  <li key={p.id}>
-                    <button
-                      onClick={() => {
-                        setCurrentProjectId(p.id);
-                        setActiveTab(DashboardTab.SEARCH);
-                      }}
-                      className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 group ${
-                        currentProjectId === p.id &&
-                        activeTab === DashboardTab.SEARCH
-                          ? "bg-[#F7F8FA] text-[#4338CA]"
-                          : "text-[#6B7280] hover:bg-gray-50 hover:text-[#111827]"
-                      }`}
-                    >
-                      <Grid
-                        className={`w-4 h-4 ${
-                          currentProjectId === p.id
-                            ? "text-[#4338CA]"
-                            : "text-gray-400 group-hover:text-gray-500"
+              {projects.length === 0 ? (
+                <p className="text-sm text-[#9CA3AF] px-3 mb-3">
+                  No projects yet.
+                </p>
+              ) : (
+                <ul className="space-y-1">
+                  {projects.map((p) => (
+                    <li key={p.id} className="relative group">
+                      <button
+                        onClick={() => {
+                          setCurrentProjectId(p.id);
+                          setActiveTab(DashboardTab.SEARCH);
+                        }}
+                        className={`w-full flex items-center gap-3 px-3 py-2 rounded-lg text-sm font-medium transition-all duration-200 group ${
+                          currentProjectId === p.id &&
+                          activeTab === DashboardTab.SEARCH
+                            ? "bg-[#F7F8FA] text-[#4338CA]"
+                            : "text-[#6B7280] hover:bg-gray-50 hover:text-[#111827]"
                         }`}
-                      />
-                      <span className="truncate">{p.name}</span>
-                    </button>
-                  </li>
-                ))}
-              </ul>
+                      >
+                        <Grid
+                          className={`w-4 h-4 ${
+                            currentProjectId === p.id
+                              ? "text-[#4338CA]"
+                              : "text-gray-400 group-hover:text-gray-500"
+                          }`}
+                        />
+                        <span className="truncate">{p.name}</span>
+                      </button>
+
+                      {/* 🧠 Prompt Tooltip */}
+                      {p.prompt && (
+                        <div className="pointer-events-none fixed left-[260px] top-[var(--tooltip-y)] z-[9999] w-80 opacity-0 group-hover:opacity-100 transition-opacity z-50">
+                          <div className="bg-[#111827] text-white text-xs rounded-lg shadow-xl p-3 leading-relaxed">
+                            <div className="font-semibold text-[#A78BFA] mb-1">
+                              Search Prompt
+                            </div>
+                            <div className="text-[#E5E7EB] whitespace-pre-wrap line-clamp-6">
+                              {p.prompt}
+                            </div>
+                          </div>
+                        </div>
+                      )}
+                    </li>
+                  ))}
+                </ul>
+              )}
             </div>
 
             <div>
