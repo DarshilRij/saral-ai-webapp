@@ -1,21 +1,20 @@
-
 export enum ViewState {
-  LANDING = 'LANDING',
-  LOGIN = 'LOGIN',
-  ONBOARDING = 'ONBOARDING',
-  DASHBOARD = 'DASHBOARD',
+  LANDING = "LANDING",
+  LOGIN = "LOGIN",
+  ONBOARDING = "ONBOARDING",
+  DASHBOARD = "DASHBOARD",
 }
 
 export enum DashboardTab {
-  SEARCH = 'SEARCH',
-  PROJECTS = 'PROJECTS',
-  CANDIDATES = 'CANDIDATES',
-  SEQUENCES = 'SEQUENCES',
-  CREDITS = 'CREDITS',
-  INTEGRATIONS = 'INTEGRATIONS',
+  SEARCH = "SEARCH",
+  PROJECTS = "PROJECTS",
+  CANDIDATES = "CANDIDATES",
+  SEQUENCES = "SEQUENCES",
+  CREDITS = "CREDITS",
+  INTEGRATIONS = "INTEGRATIONS",
 }
 
-export type SequenceType = 'EMAIL' | 'LINKEDIN';
+export type SequenceType = "EMAIL" | "LINKEDIN";
 
 export interface Skill {
   name: string;
@@ -25,7 +24,7 @@ export interface CareerNode {
   role: string;
   company: string;
   duration: string;
-  type: 'stable' | 'promotion' | 'job-hop' | 'gap';
+  type: "stable" | "promotion" | "job-hop" | "gap";
 }
 
 export interface SaralInsights {
@@ -44,7 +43,11 @@ export interface WorkHistoryItem {
   description: string;
 }
 
-export type OutreachStatus = 'NOT_CONTACTED' | 'CONTACTED' | 'REVERTED' | 'CONVERTED';
+export type OutreachStatus =
+  | "NOT_CONTACTED"
+  | "CONTACTED"
+  | "REVERTED"
+  | "CONVERTED";
 
 export interface Candidate {
   id: string;
@@ -80,6 +83,7 @@ export interface Project {
   description: string;
   candidateCount: number;
   createdAt: Date;
+  prompt?: string;
 }
 
 export interface User {
@@ -91,7 +95,7 @@ export interface User {
 
 export interface SequenceStep {
   id: string;
-  type: 'EMAIL' | 'WAIT';
+  type: "EMAIL" | "WAIT";
   subject?: string;
   content?: string;
   delayDays: number;
@@ -101,7 +105,7 @@ export interface Sequence {
   id: string;
   name: string;
   type: SequenceType;
-  status: 'DRAFT' | 'ACTIVE' | 'COMPLETED';
+  status: "DRAFT" | "ACTIVE" | "COMPLETED";
   steps: SequenceStep[];
   stats: {
     sent: number;
@@ -115,6 +119,6 @@ export interface Invoice {
   id: string;
   amount: number;
   date: string;
-  status: 'PAID' | 'PENDING';
+  status: "PAID" | "PENDING";
   planName: string;
 }
