@@ -35,6 +35,7 @@ import { generateCandidates } from "../services/geminiService";
 import { SequenceBuilder } from "./SequenceBuilder";
 import { defaultAvatarBase64 } from "@/utils/constants";
 import { searchCandidates } from "@/src/api/project";
+import { useAsyncSearch } from "@/src/hooks/useAsyncSearch";
 
 interface ProjectViewProps {
   candidates: Candidate[];
@@ -45,7 +46,11 @@ interface ProjectViewProps {
   shortlistedIds: string[];
   sequences: Sequence[];
   onAddSequence: (s: Sequence) => void;
-  onSaveSearch?: (queryRole: string, candidates: Candidate[]) => void;
+  onSaveSearch?: (
+    queryRole: string,
+    candidates: Candidate[],
+    prompt: string
+  ) => void;
 }
 
 interface FilterState {
@@ -205,6 +210,22 @@ export const ProjectView: React.FC<ProjectViewProps> = ({
     } as unknown as Candidate;
   };
 
+  const [searchQuery, setSearchQuery] = useState<string | null>(null);
+
+  const { status, progress, isSearching } = useAsyncSearch({
+    query: searchQuery,
+    onCompleted: (candidates) => {
+      setCandidates(candidates);
+
+      // 🔥 persist ONLY when completed
+      onSaveSearch(searchQuery!, candidates);
+    },
+    onFailed: (err) => {
+      console.error(err);
+      alert(err);
+    },
+  });
+
   const handleSearch = async () => {
     setShowCreditWarning(false);
     setLoading(true);
@@ -225,14 +246,7 @@ export const ProjectView: React.FC<ProjectViewProps> = ({
 
     try {
       // 1️⃣ START SEARCH (async job)
-      const startResp = await fetch(`${process.env.API_BASE}/api/search`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          query: prompt,
-          limit: 15,
-        }),
-      });
+      const startResp = await searchCandidates(prompt);
 
       if (!startResp.ok) {
         throw new Error(`Search start failed: ${startResp.status}`);
