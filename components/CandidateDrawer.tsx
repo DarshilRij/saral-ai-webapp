@@ -307,17 +307,23 @@ export default function CandidateDrawer({
   const education = (candidate as any)?.education ?? raw?.education ?? "";
 
   const resolveLinkedin = (): string => {
-    return (
+    const url =
       (candidate as any)?.socials?.linkedinUrl ||
       (candidate as any)?.linkedin ||
       raw?.linkedin_url ||
       raw?.linkedin ||
       raw?.profile_summary?.linkedin_url ||
-      raw?.linkedin_url ||
       (candidate as any)?.profile?.linkedin_url ||
       raw?.linkedinUrl ||
-      ""
-    );
+      "";
+
+    if (!url) return "";
+
+    if (!/^https?:\/\//i.test(url)) {
+      return `https://${url}`;
+    }
+
+    return url;
   };
 
   const candidateId = (candidate as any)?.id
@@ -549,7 +555,6 @@ export default function CandidateDrawer({
                 >
                   {candidate.matchScore ?? 100}% Match
                 </span>
-
                 {resolveLinkedin() && (
                   <a
                     href={resolveLinkedin()}
