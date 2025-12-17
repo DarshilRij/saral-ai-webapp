@@ -35,15 +35,7 @@ interface DashboardProps {
 
 export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
   const [activeTab, setActiveTab] = useState<DashboardTab>(DashboardTab.SEARCH);
-  const [projects, setProjects] = useState<Project[]>([
-    {
-      id: "1",
-      name: "Frontend Engineers",
-      description: "React experts",
-      candidateCount: 0,
-      createdAt: new Date(),
-    },
-  ]);
+  const [projects, setProjects] = useState<Project[]>([]);
   const [currentProjectId, setCurrentProjectId] = useState<string>("1");
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(

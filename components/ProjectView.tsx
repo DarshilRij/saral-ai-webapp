@@ -435,13 +435,13 @@ export const ProjectView: React.FC<ProjectViewProps> = ({
   };
 
   // Render Logic
-  if (!currentProject) {
-    return (
-      <div className="h-full flex flex-col items-center justify-center text-[#6B7280]">
-        <p>Select or create a project to start.</p>
-      </div>
-    );
-  }
+  // if (!currentProject) {
+  //   return (
+  //     <div className="h-full flex flex-col items-center justify-center text-[#6B7280]">
+  //       <p>Select or create a project to start.</p>
+  //     </div>
+  //   );
+  // }
 
   // Loader
   if (loading) {
