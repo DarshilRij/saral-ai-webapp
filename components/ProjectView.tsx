@@ -318,7 +318,7 @@ export const ProjectView: React.FC<ProjectViewProps> = ({
             // 4️⃣ PERSIST ONLY WHEN COMPLETED
             if (typeof onSaveSearch === "function") {
               try {
-                onSaveSearch(queryRole, mapped);
+                onSaveSearch(queryRole, mapped, prompt);
               } catch (err) {
                 console.warn("onSaveSearch failed:", err);
               }
