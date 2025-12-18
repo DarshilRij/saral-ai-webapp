@@ -36,8 +36,24 @@ interface DashboardProps {
 
 export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
   const [activeTab, setActiveTab] = useState<DashboardTab>(DashboardTab.SEARCH);
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [currentProjectId, setCurrentProjectId] = useState<string>("1");
+  const persistProjects = (projects: Project[]) => {
+    localStorage.setItem(PROJECTS_KEY, JSON.stringify(projects));
+  };
+
+  const [projects, setProjects] = useState<Project[]>(() => {
+    try {
+      return JSON.parse(localStorage.getItem(PROJECTS_KEY) || "[]");
+    } catch {
+      return [];
+    }
+  });
+
+  const [currentProjectId, setCurrentProjectId] = useState<string | null>(
+    () => {
+      return localStorage.getItem(LAST_PROJECT_KEY);
+    }
+  );
+
   const [candidates, setCandidates] = useState<Candidate[]>([]);
   const [selectedCandidate, setSelectedCandidate] = useState<Candidate | null>(
     null
@@ -106,28 +122,21 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
     candidatesFromSearch: Candidate[],
     prompt: string
   ) => {
-    // Normalize role name
-    const roleName = String(queryRole).trim();
+    const roleName = queryRole.trim();
 
-    // find existing project with same name
+    let updatedProjects: Project[];
+    let projectId: string;
+
     const existing = projects.find((p) => p.name === roleName);
 
     if (existing) {
-      // update existing project's candidateCount & persist
-      const updatedProjects = projects.map((p) =>
+      updatedProjects = projects.map((p) =>
         p.id === existing.id
-          ? {
-              ...p,
-              candidateCount: candidatesFromSearch.length,
-              prompt,
-            }
+          ? { ...p, candidateCount: candidatesFromSearch.length, prompt }
           : p
       );
-
-      setProjects(updatedProjects);
-      setCurrentProjectId(existing.id);
+      projectId = existing.id;
     } else {
-      // create a new project from this role
       const newProj: Project = {
         id: Date.now().toString(),
         name: roleName,
@@ -136,19 +145,27 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
         createdAt: new Date(),
         prompt,
       };
-      setProjects((prev) => [newProj, ...prev]);
-      setCurrentProjectId(newProj.id);
+      updatedProjects = [newProj, ...projects];
+      projectId = newProj.id;
     }
+    persistProjects(updatedProjects);
+    localStorage.setItem(LAST_PROJECT_KEY, projectId);
 
-    // Persist to localStorage keyed by roleName
-    // Keep any existing shortlist for this role if present, otherwise empty
-    const loaded = loadRoleData(roleName);
-    const shortlistToSave = loaded?.shortlistedIds ?? [];
-    saveRoleData(roleName, candidatesFromSearch, shortlistToSave, prompt);
+    // update React state
+    setProjects(updatedProjects);
+    setCurrentProjectId(projectId);
 
-    // Update UI state
+    // persist role data
+    const existingRole = loadRoleData(roleName);
+    saveRoleData(
+      roleName,
+      candidatesFromSearch,
+      existingRole?.shortlistedIds ?? [],
+      prompt
+    );
+
     setCandidates(candidatesFromSearch);
-    setShortlistedIds(shortlistToSave);
+    setShortlistedIds(existingRole?.shortlistedIds ?? []);
     setActiveTab(DashboardTab.SEARCH);
   };
 
