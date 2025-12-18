@@ -81,3 +81,6 @@ function getSkillBadgeClass(skill: string): string {
 }
 
 export { getSkillBadgeClass };
+
+export const PROJECTS_KEY = "saral:projects";
+export const LAST_PROJECT_KEY = "saral:lastProjectId";

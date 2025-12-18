@@ -27,6 +27,7 @@ import { Credits } from "./Credits";
 import { Sequences } from "./Sequences";
 import { Integrations } from "./Integrations";
 import CandidateDrawer from "./CandidateDrawer";
+import { LAST_PROJECT_KEY, PROJECTS_KEY } from "@/utils/constants";
 
 interface DashboardProps {
   user: User;
