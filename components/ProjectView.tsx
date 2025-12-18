@@ -326,7 +326,7 @@ export const ProjectView: React.FC<ProjectViewProps> = ({
 
             // small UX delay
             setTimeout(() => {
-              setCandidates(mapped);
+              // setCandidates(mapped);
               setLoading(false);
               setLoadingStep(loadingSteps.length - 1);
               setCurrentPage(1);
