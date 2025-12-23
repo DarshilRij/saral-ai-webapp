@@ -38,7 +38,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({
   }, [user]);
 
   const login = (u: User) => setUser(u);
-  const logout = () => setUser(null);
+  const logout = () => {
+    setUser(null);
+    localStorage.clear();
+  };
 
   return (
     <AuthContext.Provider value={{ user, login, logout, ready }}>

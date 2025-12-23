@@ -92,10 +92,14 @@ export const ProjectView: React.FC<ProjectViewProps> = ({
     "LINKEDIN"
   );
 
+  const [hasSearched, setHasSearched] = useState(false);
+
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const isMobile = window.innerWidth < 768;
   const itemsPerPage = isMobile ? 10 : 15;
+
+  const [searchError, setSearchError] = useState<string | null>(null);
 
   // View & Filter State
   const [viewMode, setViewMode] = useState<"search" | "shortlist">("search");
@@ -216,13 +220,12 @@ export const ProjectView: React.FC<ProjectViewProps> = ({
     query: searchQuery,
     onCompleted: (candidates) => {
       setCandidates(candidates);
-
-      // 🔥 persist ONLY when completed
-      onSaveSearch(searchQuery!, candidates);
+      setSearchError(null);
+      onSaveSearch?.(searchQuery!, candidates, prompt);
     },
     onFailed: (err) => {
-      console.error(err);
-      alert(err);
+      setSearchError(err);
+      setLoading(false);
     },
   });
 
@@ -233,6 +236,7 @@ export const ProjectView: React.FC<ProjectViewProps> = ({
     setViewMode("search");
     setCandidates([]);
     setCurrentPage(1);
+    setHasSearched(true);
 
     let stepIdx = 0;
     const stepInterval = setInterval(() => {
@@ -283,7 +287,15 @@ export const ProjectView: React.FC<ProjectViewProps> = ({
           }
 
           if (statusJson.status === "FAILED") {
-            throw new Error("Search failed on server");
+            const errorMessage =
+              statusJson.error ||
+              statusJson.message ||
+              "Search failed on server";
+
+            setSearchError(errorMessage);
+            clearInterval(stepInterval);
+            if (pollInterval) clearInterval(pollInterval);
+            setLoading(false);
           }
 
           // 3️⃣ COMPLETED → FETCH RESULTS
@@ -490,8 +502,62 @@ export const ProjectView: React.FC<ProjectViewProps> = ({
     );
   }
 
-  // Empty State (New Search)
+  if (searchError) {
+    return (
+      <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+        <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full text-center">
+          <div className="w-12 h-12 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4 text-red-600">
+            <AlertTriangle className="w-6 h-6" />
+          </div>
+
+          <h3 className="text-lg font-semibold text-[#111827] mb-2">
+            Search Failed
+          </h3>
+
+          <p className="text-[#6B7280] text-sm mb-6">{searchError}</p>
+
+          <button
+            onClick={() => setSearchError(null)}
+            className="w-full py-2.5 bg-[#4338CA] text-white rounded-lg text-sm font-medium hover:bg-[#312E81]"
+          >
+            Okay
+          </button>
+        </div>
+      </div>
+    );
+  }
+
   if (candidates.length === 0 && !loading && viewMode === "search") {
+    if (hasSearched) {
+      return (
+        <div className="max-w-3xl mx-auto pt-32 px-6 text-center animate-fade-in">
+          <div className="w-14 h-14 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Search className="w-7 h-7 text-gray-400" />
+          </div>
+
+          <h2 className="text-2xl font-semibold text-[#111827] mb-2">
+            No candidates found
+          </h2>
+
+          <p className="text-[#6B7280] mb-6">
+            We could not find any candidates matching your search criteria. Try
+            broadening the role, skills, or location.
+          </p>
+
+          <button
+            onClick={() => {
+              setPrompt("");
+              setHasSearched(false);
+            }}
+            className="px-4 py-2 bg-[#4338CA] text-white rounded-lg text-sm font-medium hover:bg-[#312E81]"
+          >
+            Start a new search
+          </button>
+        </div>
+      );
+    }
+
+    // 🆕 Case 2: never searched yet
     return (
       <div className="max-w-4xl mx-auto pt-32 px-6 text-center animate-fade-in relative z-10">
         <h2 className="text-4xl font-semibold text-[#111827] mb-4 tracking-tight">
