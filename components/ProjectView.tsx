@@ -92,6 +92,8 @@ export const ProjectView: React.FC<ProjectViewProps> = ({
     "LINKEDIN"
   );
 
+  const [hasSearched, setHasSearched] = useState(false);
+
   // Pagination
   const [currentPage, setCurrentPage] = useState(1);
   const isMobile = window.innerWidth < 768;
@@ -234,6 +236,7 @@ export const ProjectView: React.FC<ProjectViewProps> = ({
     setViewMode("search");
     setCandidates([]);
     setCurrentPage(1);
+    setHasSearched(true);
 
     let stepIdx = 0;
     const stepInterval = setInterval(() => {
@@ -524,8 +527,37 @@ export const ProjectView: React.FC<ProjectViewProps> = ({
     );
   }
 
-  // Empty State (New Search)
   if (candidates.length === 0 && !loading && viewMode === "search") {
+    if (hasSearched) {
+      return (
+        <div className="max-w-3xl mx-auto pt-32 px-6 text-center animate-fade-in">
+          <div className="w-14 h-14 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+            <Search className="w-7 h-7 text-gray-400" />
+          </div>
+
+          <h2 className="text-2xl font-semibold text-[#111827] mb-2">
+            No candidates found
+          </h2>
+
+          <p className="text-[#6B7280] mb-6">
+            We could not find any candidates matching your search criteria. Try
+            broadening the role, skills, or location.
+          </p>
+
+          <button
+            onClick={() => {
+              setPrompt("");
+              setHasSearched(false);
+            }}
+            className="px-4 py-2 bg-[#4338CA] text-white rounded-lg text-sm font-medium hover:bg-[#312E81]"
+          >
+            Start a new search
+          </button>
+        </div>
+      );
+    }
+
+    // 🆕 Case 2: never searched yet
     return (
       <div className="max-w-4xl mx-auto pt-32 px-6 text-center animate-fade-in relative z-10">
         <h2 className="text-4xl font-semibold text-[#111827] mb-4 tracking-tight">
