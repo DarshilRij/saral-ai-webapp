@@ -28,6 +28,7 @@ import { Sequences } from "./Sequences";
 import { Integrations } from "./Integrations";
 import CandidateDrawer from "./CandidateDrawer";
 import { LAST_PROJECT_KEY, PROJECTS_KEY } from "@/utils/constants";
+import ComingSoon from "./ComingSoon";
 
 interface DashboardProps {
   user: User;
@@ -467,20 +468,26 @@ export const Dashboard: React.FC<DashboardProps> = ({ user, onLogout }) => {
           />
         )}
         {activeTab === DashboardTab.CREDITS && (
-          <Credits
-            user={currentUser}
-            onBuy={() =>
-              setCurrentUser((prev) => ({
-                ...prev,
-                credits: prev.credits + 500,
-              }))
-            }
-          />
+          // <Credits
+          //   user={currentUser}
+          //   onBuy={() =>
+          //     setCurrentUser((prev) => ({
+          //       ...prev,
+          //       credits: prev.credits + 500,
+          //     }))
+          //   }
+          // />
+          // display the empty coming soon page for credits
+          <ComingSoon setActiveTab={setActiveTab} headerName="Billing & Plan" />
         )}
         {activeTab === DashboardTab.SEQUENCES && (
-          <Sequences sequences={sequences} onAddSequence={handleAddSequence} />
+          // <Sequences sequences={sequences} onAddSequence={handleAddSequence} />
+          <ComingSoon setActiveTab={setActiveTab} headerName="Sequences" />
         )}
-        {activeTab === DashboardTab.INTEGRATIONS && <Integrations />}
+        {activeTab === DashboardTab.INTEGRATIONS && (
+          // <Integrations />
+          <ComingSoon setActiveTab={setActiveTab} headerName="Integrations" />
+        )}
       </main>
 
       {/* Candidate Drawer (slide-over) */}
