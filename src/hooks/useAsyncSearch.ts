@@ -61,11 +61,15 @@ export function useAsyncSearch({
 
             if (st.status === "FAILED") {
               clearInterval(pollingRef.current!);
-              onFailed?.("Search failed on server");
+
+              const errorMessage =
+                st.error || st.message || "Search failed on server";
+
+              onFailed?.(errorMessage);
             }
           } catch (err: any) {
             clearInterval(pollingRef.current!);
-            onFailed?.(err?.message ?? "Polling error");
+            onFailed?.(err?.message || "Search polling failed");
           }
         }, 2500);
       } catch (err: any) {
