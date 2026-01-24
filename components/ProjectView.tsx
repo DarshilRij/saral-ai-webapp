@@ -662,7 +662,7 @@ export const ProjectView: React.FC<ProjectViewProps> = ({
     return (
       <div className="max-w-4xl mx-auto pt-32 px-6 text-center animate-fade-in relative z-10">
         <h2 className="text-4xl font-semibold text-[#111827] mb-4 tracking-tight">
-          Find your next hire.
+          Type your next hire.
         </h2>
         <p className="text-[#6B7280] mb-10 max-w-lg mx-auto text-lg">
           Describe the ideal candidate. Our AI searches across LinkedIn, GitHub,
@@ -688,9 +688,9 @@ export const ProjectView: React.FC<ProjectViewProps> = ({
             </div>
             <div className="px-3 py-2 bg-white border-t border-[#E5E7EB] flex justify-between items-center">
               <div className="flex gap-2">
-                <button className="text-xs font-medium px-2 py-1 rounded bg-[#F7F8FA] text-[#6B7280] hover:text-[#4338CA] hover:bg-[#F3F4F6] transition-colors">
+                {/* <button className="text-xs font-medium px-2 py-1 rounded bg-[#F7F8FA] text-[#6B7280] hover:text-[#4338CA] hover:bg-[#F3F4F6] transition-colors">
                   Add Filter
-                </button>
+                </button> */}
                 {/* Hidden file input */}
                 <input
                   ref={fileInputRef}
@@ -1107,7 +1107,7 @@ export const ProjectView: React.FC<ProjectViewProps> = ({
       )}
 
       {/* Results Grid */}
-      <div className="flex-1 overflow-y-auto p-8 relative">
+      <div className="flex-1 overflow-y-auto px-8 pt-8 pb-8 relative">
         {filteredCandidates.length === 0 ? (
           <div className="h-64 flex flex-col items-center justify-center text-[#9CA3AF]">
             <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center mb-4 border border-[#E5E7EB]">
@@ -1261,23 +1261,6 @@ export const ProjectView: React.FC<ProjectViewProps> = ({
                         </div>
                       </div>
 
-                      {/* Unlocked Info Footer Minimal */}
-                      {candidate.contactUnlocked && (
-                        <div className="mb-4 pt-3 border-t border-[#F3F4F6] flex flex-col gap-1 text-xs text-[#4B5563]">
-                          {candidate.email && (
-                            <div className="flex items-center gap-2">
-                              <Mail className="w-3 h-3 text-[#9CA3AF]" />{" "}
-                              {candidate.email}
-                            </div>
-                          )}
-                          {candidate.phone && (
-                            <div className="flex items-center gap-2">
-                              <Phone className="w-3 h-3 text-[#9CA3AF]" />{" "}
-                              {candidate.phone}
-                            </div>
-                          )}
-                        </div>
-                      )}
                     </div>
 
                     {/* Action Footer */}
@@ -1286,12 +1269,31 @@ export const ProjectView: React.FC<ProjectViewProps> = ({
                       onClick={(e) => e.stopPropagation()}
                     >
                       <div className="flex gap-1">
+                        {candidate.contactUnlocked && candidate.phone && (
+                          <a
+                            href={`tel:${candidate.phone}`}
+                            className="p-1 rounded-full text-[#9CA3AF] hover:text-[#10B981] hover:bg-green-50 transition-colors"
+                            title={`Call ${candidate.phone}`}
+                          >
+                            <Phone className="w-4 h-4" />
+                          </a>
+                        )}
+                        {candidate.contactUnlocked && candidate.email && (
+                          <a
+                            href={`mailto:${candidate.email}`}
+                            className="p-1 rounded-full text-[#9CA3AF] hover:text-[#EF4444] hover:bg-red-50 transition-colors"
+                            title={`Email ${candidate.email}`}
+                          >
+                            <Mail className="w-4 h-4" />
+                          </a>
+                        )}
                         {candidate.socials.linkedin && (
                           <a
                             href={candidate.socials.linkedinUrl}
                             target="_blank"
                             rel="noreferrer"
                             className="p-1 rounded-full text-[#9CA3AF] hover:text-[#0A66C2] hover:bg-blue-50 transition-colors"
+                            title="LinkedIn Profile"
                           >
                             <Linkedin className="w-4 h-4" />
                           </a>
@@ -1302,6 +1304,7 @@ export const ProjectView: React.FC<ProjectViewProps> = ({
                             target="_blank"
                             rel="noreferrer"
                             className="p-1 rounded-full text-[#9CA3AF] hover:text-[#0A66C2] hover:bg-blue-50 transition-colors"
+                            title="GitHub Profile"
                           >
                             <Github className="w-4 h-4" />
                           </a>
@@ -1324,7 +1327,7 @@ export const ProjectView: React.FC<ProjectViewProps> = ({
             </div>
 
             {/* Pagination */}
-            <div className="flex justify-center items-center gap-4 pb-8 sticky bottom-0 pointer-events-none">
+            <div className="flex justify-center items-center gap-4 pb-4 sticky bottom-0 pointer-events-none">
               <div className="bg-white/90 backdrop-blur-md shadow-lg border border-[#E5E7EB] rounded-full px-4 py-2 flex items-center gap-4 pointer-events-auto">
                 <button
                   onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
@@ -1346,6 +1349,13 @@ export const ProjectView: React.FC<ProjectViewProps> = ({
                   <ChevronRight className="w-5 h-5" />
                 </button>
               </div>
+            </div>
+
+            {/* Disclaimer Text */}
+            <div className="text-center mt-8">
+              <p className="text-sm text-[#6B7280] font-medium">
+                Saral AI simplifies sourcing, but human judgment is still key
+              </p>
             </div>
           </>
         )}

@@ -54,7 +54,7 @@ export async function fetchProfileById(id: string) {
 /** existing contact helper kept here for convenience */
 export async function fetchContactInfo(candidateId: string) {
   return apiRequest<ContactInfoResponse>(`/api/contact-info/${candidateId}`, {
-    method: "POST",
+    method: "GET",
   });
 }
 

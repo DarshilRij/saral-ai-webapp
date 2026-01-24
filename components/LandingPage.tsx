@@ -78,16 +78,15 @@ export const LandingPage: React.FC = () => {
         </div>
 
         <h1 className="text-5xl md:text-7xl font-semibold tracking-tight leading-[1.1] mb-6 text-[#111827]">
-          Hire smarter, not harder. <br />
-          <span className="text-[#6B7280]">SARAL finds the talent.</span>
+          Define the role once. <br />
+          <span className="text-[#6B7280]">SARAL finds the right talent.</span>
         </h1>
 
-        <p className="text-xl text-[#6B7280] max-w-2xl mx-auto mb-10 font-light leading-relaxed">
-          AI-powered candidate sourcing across LinkedIn, GitHub, and Behance.
-          Stop searching manually, start connecting instantly.
+        <p className="text-xl text-[#6B7280] max-w-2xl mx-auto mb-16 font-light leading-relaxed">
+          Tell us who you want to hire. SARAL AI finds them across the internet in seconds.
         </p>
 
-        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-20">
+        <div className="flex flex-col sm:flex-row items-center justify-center gap-4 mb-7">
           <button
             onClick={() => handleStart("/signup")}
             className="group h-12 px-8 bg-[#4338CA] text-white rounded-xl font-medium flex items-center gap-2 hover:bg-[#312E81] transition-all shadow-lg shadow-[#4338CA]/30 hover:-translate-y-0.5"
@@ -99,6 +98,10 @@ export const LandingPage: React.FC = () => {
             Book a Demo
           </button>
         </div>
+
+        <p className="text-xl text-[#6B7280] max-w-2xl mx-auto mb-10 font-light leading-relaxed">
+          Built for recruiters who care about speed, relevance, and signal over noise.
+        </p>
 
         {/* Mockup */}
         <div className="relative mx-auto max-w-4xl bg-white rounded-xl border border-[#E5E7EB] shadow-2xl overflow-hidden aspect-[16/10]">

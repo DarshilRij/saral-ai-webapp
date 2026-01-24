@@ -178,7 +178,7 @@ export const Auth: React.FC<AuthProps & { defaultMode?: Mode }> = ({
     setStep("SUCCESS");
     const user: User = {
       email,
-      companyName: company || "Acme Inc",
+      companyName: company || "John Doe",
       credits: 120,
       role,
     };
@@ -259,8 +259,8 @@ export const Auth: React.FC<AuthProps & { defaultMode?: Mode }> = ({
       console.error("resend-otp error:", err);
       setError(
         err?.response?.data?.message ||
-          err?.message ||
-          "Failed to resend OTP. Try again."
+        err?.message ||
+        "Failed to resend OTP. Try again."
       );
     } finally {
       setLoading(false);
@@ -309,21 +309,18 @@ export const Auth: React.FC<AuthProps & { defaultMode?: Mode }> = ({
               {/* top progress */}
               <div className="flex justify-center gap-2 mb-6">
                 <div
-                  className={`h-1.5 rounded-full transition-all duration-500 ${
-                    step === "LOGIN" ? "w-10 bg-[#4338CA]" : "w-2 bg-[#E5E7EB]"
-                  }`}
+                  className={`h-1.5 rounded-full transition-all duration-500 ${step === "LOGIN" ? "w-10 bg-[#4338CA]" : "w-2 bg-[#E5E7EB]"
+                    }`}
                 ></div>
                 <div
-                  className={`h-1.5 rounded-full transition-all duration-500 ${
-                    step === "OTP" ? "w-10 bg-[#4338CA]" : "w-2 bg-[#E5E7EB]"
-                  }`}
+                  className={`h-1.5 rounded-full transition-all duration-500 ${step === "OTP" ? "w-10 bg-[#4338CA]" : "w-2 bg-[#E5E7EB]"
+                    }`}
                 ></div>
                 <div
-                  className={`h-1.5 rounded-full transition-all duration-500 ${
-                    step === "ONBOARDING"
+                  className={`h-1.5 rounded-full transition-all duration-500 ${step === "ONBOARDING"
                       ? "w-10 bg-[#4338CA]"
                       : "w-2 bg-[#E5E7EB]"
-                  }`}
+                    }`}
                 ></div>
               </div>
 
