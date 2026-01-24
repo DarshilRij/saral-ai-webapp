@@ -25,6 +25,10 @@ import {
   fetchProfileById,
   fetchSaralInsight, // NEW
 } from "@/src/api/candidate";
+import {
+  fetchGithubInsights,
+  GitHubInsights,
+} from "@/src/api/githubInsights";
 
 interface CandidateDrawerProps {
   candidate: Candidate | null;
@@ -36,7 +40,7 @@ interface CandidateDrawerProps {
   userCredits: number;
 }
 
-type TabKey = "DETAILS" | "INSIGHTS" | "CONTACT";
+type TabKey = "DETAILS" | "INSIGHTS" | "GITHUB_INSIGHTS" | "CONTACT";
 
 function parseDurationToMonths(durationStr: string): number {
   if (!durationStr) return 0;
@@ -128,6 +132,12 @@ export default function CandidateDrawer({
   const [saralError, setSaralError] = useState<string | null>(null);
   const [saralData, setSaralData] = useState<any>(null);
 
+  // NEW: GitHub insights state (lazy-loaded when tab clicked)
+  const [githubLoading, setGithubLoading] = useState(false);
+  const [githubError, setGithubError] = useState<string | null>(null);
+  const [githubData, setGithubData] = useState<GitHubInsights | null>(null);
+
+
   // ---------- RAW MERGE LAYER ----------
   const raw = useMemo(() => {
     const candidateRaw = (candidate as any)?._raw ?? {};
@@ -188,40 +198,39 @@ export default function CandidateDrawer({
     const trajectory =
       Array.isArray(profExp) && profExp.length
         ? profExp.map((exp: any) => {
-            let duration =
-              exp.duration ??
-              exp.duration_display ??
-              exp.duration_text ??
-              exp.dates ??
-              exp.company_and_dates ??
-              exp.caption ??
-              "";
+          let duration =
+            exp.duration ??
+            exp.duration_display ??
+            exp.duration_text ??
+            exp.dates ??
+            exp.company_and_dates ??
+            exp.caption ??
+            "";
 
-            // If only start_date is present, build duration string for parseDurationToMonths
-            if (!duration && exp.start_date?.year) {
-              duration = `${exp.start_date?.month ?? ""} ${
-                exp.start_date?.year
+          // If only start_date is present, build duration string for parseDurationToMonths
+          if (!duration && exp.start_date?.year) {
+            duration = `${exp.start_date?.month ?? ""} ${exp.start_date?.year
               }`;
-            }
+          }
 
-            const months = parseDurationToMonths(duration);
-            return {
-              role: exp.job_title ?? exp.title ?? exp.role ?? "—",
-              company:
-                (exp.company ?? exp.company_and_dates ?? "")
-                  .split("•")[0]
-                  .trim() ||
-                exp.company ||
-                "—",
-              durationRaw: duration,
-              months,
-              is_current:
-                !!exp.is_current ||
-                (String(duration).toLowerCase().includes("present")
-                  ? true
-                  : false),
-            };
-          })
+          const months = parseDurationToMonths(duration);
+          return {
+            role: exp.job_title ?? exp.title ?? exp.role ?? "—",
+            company:
+              String(exp.company ?? exp.company_and_dates ?? "")
+                .split("•")[0]
+                .trim() ||
+              exp.company ||
+              "—",
+            durationRaw: duration,
+            months,
+            is_current:
+              !!exp.is_current ||
+              (String(duration).toLowerCase().includes("present")
+                ? true
+                : false),
+          };
+        })
         : [];
 
     return {
@@ -270,13 +279,13 @@ export default function CandidateDrawer({
         months,
         description:
           e.subComponents &&
-          Array.isArray(e.subComponents) &&
-          e.subComponents.length
+            Array.isArray(e.subComponents) &&
+            e.subComponents.length
             ? e.subComponents[0].description &&
               Array.isArray(e.subComponents[0].description)
               ? e.subComponents[0].description
-                  .map((d: any) => (d.text ? d.text : ""))
-                  .join("\n")
+                .map((d: any) => (d.text ? d.text : ""))
+                .join("\n")
               : e.subComponents[0].description
             : e.description ?? "",
       };
@@ -360,9 +369,16 @@ export default function CandidateDrawer({
       setProfileData(null);
     }
 
+    // Reset SARAL insights when candidate changes
     setSaralData(null);
     setSaralError(null);
     setSaralLoading(false);
+
+    // Reset GitHub insights when candidate changes
+    setGithubData(null);
+    setGithubError(null);
+    setGithubLoading(false);
+
     setActiveTab("DETAILS");
 
     return () => {
@@ -436,6 +452,27 @@ export default function CandidateDrawer({
       }
     })();
   };
+
+  // NEW: when GitHub Insights tab is clicked, lazy-load GitHub analytics
+  const handleGithubInsightsClick = () => {
+    setActiveTab("GITHUB_INSIGHTS");
+    if (!candidate?.socials?.githubUrl || githubData || githubLoading) return;
+
+    (async () => {
+      try {
+        setGithubError(null);
+        setGithubLoading(true);
+        const data = await fetchGithubInsights(candidate.socials.githubUrl);
+        setGithubData(data);
+      } catch (err: any) {
+        console.error("[CandidateDrawer] fetch GitHub insights error:", err);
+        setGithubError(err?.message ?? "Failed to load GitHub insights");
+      } finally {
+        setGithubLoading(false);
+      }
+    })();
+  };
+
 
   // Chart helpers
   const trajectory = insights.trajectory || [];
@@ -547,11 +584,10 @@ export default function CandidateDrawer({
 
               <div className="flex gap-2 mt-2 items-center">
                 <span
-                  className={`px-2 py-0.5 rounded-full text-xs font-semibold border ${
-                    (candidate.matchScore ?? 0) > 90
-                      ? "bg-green-50 text-[#059669] border-green-200"
-                      : "bg-indigo-50 text-[#4338CA] border-indigo-200"
-                  }`}
+                  className={`px-2 py-0.5 rounded-full text-xs font-semibold border ${(candidate.matchScore ?? 0) > 90
+                    ? "bg-green-50 text-[#059669] border-green-200"
+                    : "bg-indigo-50 text-[#4338CA] border-indigo-200"
+                    }`}
                 >
                   {candidate.matchScore ?? 100}% Match
                 </span>
@@ -568,7 +604,7 @@ export default function CandidateDrawer({
 
                 {candidate.socials?.github && (
                   <a
-                    href={candidate.socials.github || "#"}
+                    href={candidate.socials.githubUrl || "#"}
                     target="_blank"
                     rel="noreferrer"
                     className="p-1 rounded-full text-[#9CA3AF] hover:text-[#111827] hover:bg-gray-50 transition-colors"
@@ -602,11 +638,10 @@ export default function CandidateDrawer({
               role="tab"
               aria-selected={activeTab === "DETAILS"}
               onClick={() => setActiveTab("DETAILS")}
-              className={`px-4 py-2 rounded-md text-sm font-semibold transition-all ${
-                activeTab === "DETAILS"
-                  ? "bg-[#4338CA] text-white"
-                  : "text-[#6B7280] bg-white border border-[#E5E7EB]"
-              }`}
+              className={`px-4 py-2 rounded-md text-sm font-semibold transition-all ${activeTab === "DETAILS"
+                ? "bg-[#4338CA] text-white"
+                : "text-[#6B7280] bg-white border border-[#E5E7EB]"
+                }`}
             >
               Details
             </button>
@@ -615,11 +650,10 @@ export default function CandidateDrawer({
               role="tab"
               aria-selected={activeTab === "INSIGHTS"}
               onClick={handleInsightsClick} // NEW
-              className={`px-4 py-2 rounded-md text-sm font-semibold transition-all inline-flex items-center gap-2 ${
-                activeTab === "INSIGHTS"
-                  ? "bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-500 text-white shadow-md"
-                  : "text-[#6B7280] bg-white border border-[#E5E7EB]"
-              }`}
+              className={`px-4 py-2 rounded-md text-sm font-semibold transition-all inline-flex items-center gap-2 ${activeTab === "INSIGHTS"
+                ? "bg-gradient-to-r from-indigo-600 via-purple-600 to-pink-500 text-white shadow-md"
+                : "text-[#6B7280] bg-white border border-[#E5E7EB]"
+                }`}
             >
               <div className="flex items-center gap-2">
                 <div className="w-6 h-6 rounded-md flex items-center justify-center bg-white/10">
@@ -627,37 +661,49 @@ export default function CandidateDrawer({
                 </div>
                 <span>SARAL Insights</span>
                 <Star
-                  className={`w-4 h-4 ${
-                    activeTab === "INSIGHTS"
-                      ? "text-white/90"
-                      : "text-[#9CA3AF]"
-                  }`}
+                  className={`w-4 h-4 ${activeTab === "INSIGHTS"
+                    ? "text-white/90"
+                    : "text-[#9CA3AF]"
+                    }`}
                 />
               </div>
             </button>
+
+            {candidate?.socials?.githubUrl && (
+              <button
+                role="tab"
+                aria-selected={activeTab === "GITHUB_INSIGHTS"}
+                onClick={handleGithubInsightsClick}
+                className={`px-4 py-2 rounded-md text-sm font-semibold transition-all inline-flex items-center gap-2 ${activeTab === "GITHUB_INSIGHTS"
+                  ? "bg-[#24292F] text-white shadow-md"
+                  : "text-[#6B7280] bg-white border border-[#E5E7EB]"
+                  }`}
+                disabled={!candidate.socials?.githubUrl}
+              >
+                <Github className="w-4 h-4" />
+                <span>GitHub Insights</span>
+              </button>
+            )}
 
             <button
               role="tab"
               aria-selected={activeTab === "CONTACT"}
               onClick={() => setActiveTab("CONTACT")}
-              className={`px-4 py-2 rounded-md text-sm font-semibold transition-all flex items-center gap-2 ${
-                activeTab === "CONTACT"
-                  ? "bg-[#4338CA] text-white"
-                  : "text-[#6B7280] bg-white border border-[#E5E7EB]"
-              }`}
+              className={`px-4 py-2 rounded-md text-sm font-semibold transition-all flex items-center gap-2 ${activeTab === "CONTACT"
+                ? "bg-[#4338CA] text-white"
+                : "text-[#6B7280] bg-white border border-[#E5E7EB]"
+                }`}
             >
               Contact Details
               {candidate.contactUnlocked ? (
                 <UnlockIcon
-                  className={`w-4 h-4 ${
-                    activeTab === "CONTACT" ? "text-white/90" : "text-[#6B7280]"
-                  }`}
+                  className={`w-4 h-4 ${activeTab === "CONTACT" ? "text-white/90" : "text-[#6B7280]"
+                    }`}
                 />
               ) : (
                 <Lock
-                  className={`${
-                    activeTab === "CONTACT" ? "text-white/90" : "text-[#6B7280]"
-                  } w-4 h-4`}
+                  className={`${activeTab === "CONTACT" ? "text-white/90" : "text-[#6B7280]"
+                    } w-4 h-4`}
                 />
               )}
             </button>
@@ -677,15 +723,15 @@ export default function CandidateDrawer({
                 <div className="flex flex-wrap gap-2">
                   {profileLoading
                     ? // skeleton for skills
-                      Array.from({ length: 6 }).map((_, i) => (
-                        <span
-                          key={i}
-                          className="h-6 w-16 bg-gray-100 rounded animate-pulse block"
-                        />
-                      ))
+                    Array.from({ length: 6 }).map((_, i) => (
+                      <span
+                        key={i}
+                        className="h-6 w-16 bg-gray-100 rounded animate-pulse block"
+                      />
+                    ))
                     : (profileData?.data?.skills ?? candidate.skills ?? [])
-                        .length > 0
-                    ? (profileData?.data?.skills ?? candidate.skills ?? [])
+                      .length > 0
+                      ? (profileData?.data?.skills ?? candidate.skills ?? [])
                         .slice(0, 12)
                         .map((s: string) => (
                           <span
@@ -697,7 +743,7 @@ export default function CandidateDrawer({
                             {s}
                           </span>
                         ))
-                    : (raw?.experience ?? [])
+                      : (raw?.experience ?? [])
                         .flatMap((e: any) => e.skills ?? [])
                         .slice(0, 12)
                         .map((s: string) => (
@@ -763,7 +809,7 @@ export default function CandidateDrawer({
                             <Briefcase className="w-4 h-4" />
                             <span>
                               {typeof job.months === "number" &&
-                              job.months > 0 ? (
+                                job.months > 0 ? (
                                 job.months >= 12 ? (
                                   <>
                                     {Math.floor(job.months / 12)}y{" "}
@@ -809,7 +855,7 @@ export default function CandidateDrawer({
                 <h4 className="text-xs font-bold text-[#111827] uppercase tracking-widest mb-2">
                   About
                 </h4>
-                <p className="text-sm text-[#4B5563] leading-relaxed whitespace-pre-wrap">
+                <div className="text-sm text-[#4B5563] leading-relaxed whitespace-pre-wrap">
                   {profileLoading ? (
                     <>
                       <div className="h-3 w-full bg-gray-100 rounded mb-2 animate-pulse" />
@@ -818,7 +864,7 @@ export default function CandidateDrawer({
                   ) : (
                     bio || "No bio available."
                   )}
-                </p>
+                </div>
               </div>
             </section>
           )}
@@ -1126,8 +1172,8 @@ export default function CandidateDrawer({
                                             label:
                                               p.months >= 12
                                                 ? `${Math.floor(
-                                                    p.months / 12
-                                                  )}y ${p.months % 12}m`
+                                                  p.months / 12
+                                                )}y ${p.months % 12}m`
                                                 : `${p.months}m`,
                                           })
                                         }
@@ -1197,6 +1243,418 @@ export default function CandidateDrawer({
                     </div>
                   </div>
                 </>
+              )}
+            </section>
+          )}
+
+          {/* GITHUB INSIGHTS */}
+          {activeTab === "GITHUB_INSIGHTS" && (
+            <section>
+              {/* Error state */}
+              {githubError && !githubLoading && !githubData && (
+                <div className="mb-4 text-sm text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+                  {githubError}
+                </div>
+              )}
+
+              {/* Skeleton while fetching GitHub insights */}
+              {githubLoading && !githubData ? (
+                <div className="space-y-6 animate-pulse">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-md bg-gray-200" />
+                    <div className="flex-1 space-y-2">
+                      <div className="h-3 w-32 bg-gray-200 rounded" />
+                      <div className="h-3 w-56 bg-gray-200 rounded" />
+                    </div>
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div className="h-24 bg-gray-100 rounded-xl" />
+                    <div className="h-24 bg-gray-100 rounded-xl" />
+                    <div className="h-24 bg-gray-100 rounded-xl" />
+                  </div>
+                  <div className="h-32 bg-gray-100 rounded-xl" />
+                  <div className="h-48 bg-gray-100 rounded-xl" />
+                </div>
+              ) : githubData ? (
+                <>
+                  {/* Header */}
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="w-10 h-10 rounded-md bg-[#24292F] flex items-center justify-center shadow-md">
+                      <Github className="w-5 h-5 text-white" />
+                    </div>
+                    <div className="flex-1">
+                      <div className="text-xs font-bold text-[#111827] uppercase tracking-widest">
+                        GitHub Insights
+                      </div>
+                      <div className="text-sm text-[#6B7280]">
+                        Developer analytics and contribution patterns
+                      </div>
+                    </div>
+                    <a
+                      href={`https://github.com/${githubData.username}`}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-xs text-[#4338CA] hover:underline flex items-center gap-1"
+                    >
+                      View Profile <ExternalLink className="w-3 h-3" />
+                    </a>
+                  </div>
+
+                  {/* Developer Score */}
+                  <div className="mb-6 bg-gradient-to-br from-white to-gray-50 rounded-xl p-6 text-gray-900 shadow-lg border border-gray-200">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <div className="text-xs uppercase tracking-wide text-gray-500 mb-1">
+                          Developer Score
+                        </div>
+                        <div className="text-5xl font-bold text-gray-900">
+                          {githubData.final_evaluation.developer_score}
+                          <span className="text-2xl text-gray-400">/100</span>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-xs uppercase tracking-wide text-gray-500 mb-2">
+                          Estimated Level
+                        </div>
+                        <div className="inline-block px-4 py-2 bg-gray-100 rounded-lg border border-gray-200">
+                          <span className="text-lg font-semibold text-gray-800">
+                            {githubData.final_evaluation.estimated_level}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Profile Overview */}
+                  <div className="grid grid-cols-3 gap-4 mb-6">
+                    <div className="bg-white border border-[#E5E7EB] rounded-xl p-4">
+                      <div className="text-xs text-[#6B7280] mb-1">Followers</div>
+                      <div className="text-2xl font-bold text-[#111827]">
+                        {githubData.profile.followers}
+                      </div>
+                    </div>
+                    <div className="bg-white border border-[#E5E7EB] rounded-xl p-4">
+                      <div className="text-xs text-[#6B7280] mb-1">Public Repos</div>
+                      <div className="text-2xl font-bold text-[#111827]">
+                        {githubData.profile.public_repos}
+                      </div>
+                    </div>
+                    <div className="bg-white border border-[#E5E7EB] rounded-xl p-4">
+                      <div className="text-xs text-[#6B7280] mb-1">Account Age</div>
+                      <div className="text-2xl font-bold text-[#111827]">
+                        {githubData.profile.account_age_years.toFixed(1)}
+                        <span className="text-sm text-[#6B7280] ml-1">yrs</span>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="mb-6">
+                    <h4 className="text-xs font-bold text-[#111827] uppercase tracking-widest mb-3">
+                      Activity Overview
+                    </h4>
+                    <div className="bg-white rounded-xl p-8 border border-gray-200 shadow-sm">
+                      <div className="flex items-center justify-center">
+                        {/* SVG Radial Graph - Light Mode */}
+                        <svg
+                          width="280"
+                          height="280"
+                          viewBox="0 0 280 280"
+                          className="overflow-visible"
+                        >
+                          {/* Grid circles - Changed stroke to #E5E7EB (Gray-200) */}
+                          <circle cx="140" cy="140" r="30" fill="none" stroke="#E5E7EB" strokeWidth="1" />
+                          <circle cx="140" cy="140" r="60" fill="none" stroke="#E5E7EB" strokeWidth="1" />
+                          <circle cx="140" cy="140" r="90" fill="none" stroke="#E5E7EB" strokeWidth="1" />
+
+                          {/* Axis lines - Changed stroke to #E5E7EB (Gray-200) */}
+                          <line x1="140" y1="140" x2="140" y2="20" stroke="#E5E7EB" strokeWidth="1" />
+                          <line x1="140" y1="140" x2="260" y2="140" stroke="#E5E7EB" strokeWidth="1" />
+                          <line x1="140" y1="140" x2="140" y2="260" stroke="#E5E7EB" strokeWidth="1" />
+                          <line x1="140" y1="140" x2="20" y2="140" stroke="#E5E7EB" strokeWidth="1" />
+
+                          {/* Data lines - Colors kept vibrant, they pop well on white */}
+                          {/* Commits (left) */}
+                          <line
+                            x1="140"
+                            y1="140"
+                            x2={140 - (githubData.contribution_style.commits_pct * 1.2)}
+                            y2="140"
+                            stroke="#10B981"
+                            strokeWidth="3"
+                            strokeLinecap="round"
+                          />
+                          <circle
+                            cx={140 - (githubData.contribution_style.commits_pct * 1.2)}
+                            cy="140"
+                            r="5"
+                            fill="#10B981"
+                          />
+
+                          {/* Pull Requests (bottom) */}
+                          <line
+                            x1="140"
+                            y1="140"
+                            x2="140"
+                            y2={140 + (githubData.contribution_style.pull_requests_pct * 1.2)}
+                            stroke="#8B5CF6"
+                            strokeWidth="3"
+                            strokeLinecap="round"
+                          />
+                          <circle
+                            cx="140"
+                            cy={140 + (githubData.contribution_style.pull_requests_pct * 1.2)}
+                            r="5"
+                            fill="#8B5CF6"
+                          />
+
+                          {/* Code Reviews (top) */}
+                          <line
+                            x1="140"
+                            y1="140"
+                            x2="140"
+                            y2={140 - (githubData.contribution_style.code_reviews_pct * 1.2)}
+                            stroke="#3B82F6"
+                            strokeWidth="3"
+                            strokeLinecap="round"
+                          />
+                          <circle
+                            cx="140"
+                            cy={140 - (githubData.contribution_style.code_reviews_pct * 1.2)}
+                            r="5"
+                            fill="#3B82F6"
+                          />
+
+                          {/* Issues (right) */}
+                          <line
+                            x1="140"
+                            y1="140"
+                            x2={140 + (githubData.contribution_style.issues_pct * 1.2)}
+                            y2="140"
+                            stroke="#F59E0B"
+                            strokeWidth="3"
+                            strokeLinecap="round"
+                          />
+                          <circle
+                            cx={140 + (githubData.contribution_style.issues_pct * 1.2)}
+                            cy="140"
+                            r="5"
+                            fill="#F59E0B"
+                          />
+
+                          {/* Center dot - darkened slightly to #2563EB for better contrast on white */}
+                          <circle cx="140" cy="140" r="6" fill="#2563EB" />
+
+                          {/* Labels - Changed fill to #6B7280 (Gray-500) */}
+                          <text
+                            x="10"
+                            y="145"
+                            fill="#6B7280"
+                            fontSize="13"
+                            fontWeight="500"
+                            textAnchor="end"
+                          >
+                            {githubData.contribution_style.commits_pct}%
+                          </text>
+                          <text
+                            x="10"
+                            y="130"
+                            fill="#6B7280"
+                            fontSize="11"
+                            textAnchor="end"
+                          >
+                            Commits
+                          </text>
+
+                          <text
+                            x="145"
+                            y="275"
+                            fill="#6B7280"
+                            fontSize="13"
+                            fontWeight="500"
+                            textAnchor="middle"
+                          >
+                            {githubData.contribution_style.pull_requests_pct}%
+                          </text>
+                          <text
+                            x="145"
+                            y="290"
+                            fill="#6B7280"
+                            fontSize="11"
+                            textAnchor="middle"
+                          >
+                            Pull requests
+                          </text>
+
+                          <text
+                            x="145"
+                            y="10"
+                            fill="#6B7280"
+                            fontSize="13"
+                            fontWeight="500"
+                            textAnchor="middle"
+                          >
+                            {githubData.contribution_style.code_reviews_pct}%
+                          </text>
+                          <text
+                            x="145"
+                            y="22"
+                            fill="#6B7280"
+                            fontSize="11"
+                            textAnchor="middle"
+                          >
+                            Code review
+                          </text>
+
+                          <text
+                            x="270"
+                            y="145"
+                            fill="#6B7280"
+                            fontSize="13"
+                            fontWeight="500"
+                            textAnchor="start"
+                          >
+                            {githubData.contribution_style.issues_pct}%
+                          </text>
+                          <text
+                            x="270"
+                            y="130"
+                            fill="#6B7280"
+                            fontSize="11"
+                            textAnchor="start"
+                          >
+                            Issues
+                          </text>
+                        </svg>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Activity Metrics */}
+                  <div className="mb-6">
+                    <h4 className="text-xs font-bold text-[#111827] uppercase tracking-widest mb-3">
+                      Activity Metrics
+                    </h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="bg-white border border-[#E5E7EB] rounded-xl p-4">
+                        <div className="text-xs text-[#6B7280] mb-1">Total Commits</div>
+                        <div className="text-2xl font-bold text-[#111827]">
+                          {githubData.activity.total_commits.toLocaleString()}
+                        </div>
+                      </div>
+                      <div className="bg-white border border-[#E5E7EB] rounded-xl p-4">
+                        <div className="text-xs text-[#6B7280] mb-1">Avg Commits/Month</div>
+                        <div className="text-2xl font-bold text-[#111827]">
+                          {githubData.activity.avg_commits_per_month.toFixed(1)}
+                        </div>
+                      </div>
+                      <div className="bg-white border border-[#E5E7EB] rounded-xl p-4">
+                        <div className="text-xs text-[#6B7280] mb-1">Consistency Score</div>
+                        <div className="text-2xl font-bold text-[#111827]">
+                          {githubData.activity.consistency_score}
+                          <span className="text-sm text-[#6B7280] ml-1">/100</span>
+                        </div>
+                      </div>
+                      <div className="bg-white border border-[#E5E7EB] rounded-xl p-4">
+                        <div className="text-xs text-[#6B7280] mb-1">Active Repos (6mo)</div>
+                        <div className="text-2xl font-bold text-[#111827]">
+                          {githubData.activity.active_repos_last_6_months}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Tech Stack */}
+                  <div className="mb-6">
+                    <h4 className="text-xs font-bold text-[#111827] uppercase tracking-widest mb-3">
+                      Tech Stack
+                    </h4>
+                    <div className="flex flex-wrap gap-2">
+                      {Object.entries(githubData.tech_stack)
+                        .sort(([, a], [, b]) => (b as number) - (a as number))
+                        .map(([lang, count]) => (
+                          <span
+                            key={lang}
+                            className="text-xs px-3 py-1.5 rounded-full border bg-white border-[#E5E7EB] text-[#374151] font-medium"
+                          >
+                            {lang} ({count})
+                          </span>
+                        ))}
+                    </div>
+                  </div>
+
+                  {/* Open Source Contributions */}
+                  {githubData.open_source.is_open_source_contributor && (
+                    <div className="mb-6">
+                      <h4 className="text-xs font-bold text-[#111827] uppercase tracking-widest mb-3">
+                        Open Source Contributions
+                      </h4>
+                      <div className="bg-gradient-to-r from-purple-50 to-pink-50 border border-purple-100 rounded-xl p-5">
+                        <div className="flex items-center gap-3 mb-4">
+                          <Star className="w-5 h-5 text-purple-600" />
+                          <div>
+                            <div className="text-sm font-semibold text-purple-900">
+                              Active Open Source Contributor
+                            </div>
+                            <div className="text-xs text-purple-700">
+                              OSS Score: {githubData.open_source.oss_score}
+                            </div>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-3 gap-4">
+                          <div>
+                            <div className="text-xs text-purple-700">Pull Requests</div>
+                            <div className="text-xl font-bold text-purple-900">
+                              {githubData.open_source.prs}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-xs text-purple-700">Reviews</div>
+                            <div className="text-xl font-bold text-purple-900">
+                              {githubData.open_source.reviews}
+                            </div>
+                          </div>
+                          <div>
+                            <div className="text-xs text-purple-700">Issues</div>
+                            <div className="text-xl font-bold text-purple-900">
+                              {githubData.open_source.issues}
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Repository Impact */}
+                  <div className="mb-6">
+                    <h4 className="text-xs font-bold text-[#111827] uppercase tracking-widest mb-3">
+                      Repository Impact
+                    </h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="bg-white border border-[#E5E7EB] rounded-xl p-4">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Star className="w-4 h-4 text-[#F59E0B]" />
+                          <div className="text-xs text-[#6B7280]">Total Stars</div>
+                        </div>
+                        <div className="text-2xl font-bold text-[#111827]">
+                          {githubData.repository_impact.total_stars}
+                        </div>
+                      </div>
+                      <div className="bg-white border border-[#E5E7EB] rounded-xl p-4">
+                        <div className="flex items-center gap-2 mb-1">
+                          <Github className="w-4 h-4 text-[#6B7280]" />
+                          <div className="text-xs text-[#6B7280]">Total Forks</div>
+                        </div>
+                        <div className="text-2xl font-bold text-[#111827]">
+                          {githubData.repository_impact.total_forks}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="text-center py-12 text-[#6B7280]">
+                  No GitHub profile linked for this candidate.
+                </div>
               )}
             </section>
           )}

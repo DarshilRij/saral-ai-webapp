@@ -12,6 +12,7 @@
     "@google/genai": "^1.30.0",
     "axios": "^1.13.2",
     "lucide-react": "^0.554.0",
+    "pdfjs-dist": "^5.4.530",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.9.6"
@@ -19,6 +20,7 @@
   "devDependencies": {
     "@types/node": "^22.14.0",
     "@vitejs/plugin-react": "^5.0.0",
+    "baseline-browser-mapping": "^2.9.17",
     "typescript": "~5.8.2",
     "vite": "^6.2.0"
   }

@@ -1,24 +1,23 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
+import * as pdfjsLib from "pdfjs-dist";
+
+// --- START: PDF Worker Fix ---
+// @ts-ignore
+import workerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
+// --- END: PDF Worker Fix ---
+
 import {
   Search,
   Sparkles,
   Filter,
-  MoreHorizontal,
   Heart,
-  MessageSquare,
   Briefcase,
   MapPin,
-  Clock,
   CheckCircle,
-  Plus,
   ChevronRight,
   X,
-  SlidersHorizontal,
   Search as SearchIcon,
   AlertTriangle,
-  ArrowRight,
-  Building2,
-  Calendar,
   Mail,
   Phone,
   Github,
@@ -29,10 +28,12 @@ import {
   Copy,
   Loader2,
   Check,
+  Upload,
+  FileText,
+  ArrowRight,
 } from "lucide-react";
+
 import { Candidate, Project, Sequence } from "../types";
-import { generateCandidates } from "../services/geminiService";
-import { SequenceBuilder } from "./SequenceBuilder";
 import { defaultAvatarBase64 } from "@/utils/constants";
 import { searchCandidates } from "@/src/api/project";
 import { useAsyncSearch } from "@/src/hooks/useAsyncSearch";
@@ -76,6 +77,15 @@ export const ProjectView: React.FC<ProjectViewProps> = ({
   const [prompt, setPrompt] = useState("");
   const [loading, setLoading] = useState(false);
   const [loadingStep, setLoadingStep] = useState(0);
+
+  // PDF Upload State
+  const [pdfExtracting, setPdfExtracting] = useState(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Job Description Modal State
+  const [showJdModal, setShowJdModal] = useState(false);
+  const [jdText, setJdText] = useState("");
 
   // Modals
   const [showCreditWarning, setShowCreditWarning] = useState(false);
@@ -125,12 +135,246 @@ export const ProjectView: React.FC<ProjectViewProps> = ({
     "Preparing insights and match list...",
   ];
 
+  // Configure PDF.js worker using local import
+  React.useEffect(() => {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
+  }, []);
+
+  // --- MODIFIED: Search Logic ---
+  // Accepts optional overrideText to handle PDF auto-submit
+  const handleSearch = async (overrideText?: string) => {
+    // Determine which text to use: the argument (if from PDF) or the state (if from button)
+    const textToSearch = typeof overrideText === 'string' ? overrideText : prompt;
+
+    if (!textToSearch || !textToSearch.trim()) return;
+
+    // Sync state if we are running from an override
+    if (overrideText) setPrompt(overrideText);
+
+    setShowCreditWarning(false);
+    setLoading(true);
+    setLoadingStep(0);
+    setViewMode("search");
+    setCandidates([]);
+    setCurrentPage(1);
+    setHasSearched(true);
+    setSearchError(null);
+
+    let stepIdx = 0;
+    const stepInterval = setInterval(() => {
+      stepIdx++;
+      if (stepIdx < loadingSteps.length) {
+        setLoadingStep(stepIdx);
+      }
+    }, 1500);
+
+    let pollInterval: NodeJS.Timeout | null = null;
+
+    try {
+      // 1️⃣ START SEARCH (Using textToSearch variable)
+      const startResp = await searchCandidates(textToSearch);
+
+      if (!startResp.ok) {
+        throw new Error(`Search start failed: ${startResp.status}`);
+      }
+
+      const startJson = await startResp.json();
+      const sessionId = startJson?.session_id;
+
+      if (!sessionId) {
+        throw new Error("No session_id returned from search API");
+      }
+
+      // 2️⃣ POLL STATUS
+      pollInterval = setInterval(async () => {
+        try {
+          const statusResp = await fetch(
+            `${process.env.API_BASE}/api/search/status/${sessionId}`
+          );
+
+          if (!statusResp.ok) {
+            throw new Error("Status polling failed");
+          }
+
+          const statusJson = await statusResp.json();
+
+          // update progress if backend sends it
+          if (typeof statusJson.progress === "number") {
+            setLoadingStep(
+              Math.min(
+                loadingSteps.length - 1,
+                Math.floor((statusJson.progress / 100) * loadingSteps.length)
+              )
+            );
+          }
+
+          if (statusJson.status === "FAILED") {
+            const errorMessage =
+              statusJson.error ||
+              statusJson.message ||
+              "Search failed on server";
+
+            setSearchError(errorMessage);
+            clearInterval(stepInterval);
+            if (pollInterval) clearInterval(pollInterval);
+            setLoading(false);
+          }
+
+          // 3️⃣ COMPLETED → FETCH RESULTS
+          if (statusJson.status === "COMPLETED") {
+            if (pollInterval) clearInterval(pollInterval);
+            clearInterval(stepInterval);
+
+            const resultResp = await fetch(
+              `${process.env.API_BASE}/api/search/result/${sessionId}`
+            );
+
+            if (!resultResp.ok) {
+              throw new Error("Failed to fetch search results");
+            }
+
+            const resultJson = await resultResp.json();
+
+            const hits = resultJson?.data?.results ?? resultJson?.results ?? [];
+
+            const mapped: Candidate[] = Array.isArray(hits)
+              ? hits.map(mapApiResultToCandidate)
+              : [];
+
+            // 🔑 role name resolution
+            const queryRole =
+              resultJson?.data?.metadata?.query_role ??
+              resultJson?.data?.metadata?.parsed_query?.job_title ??
+              currentProject?.name ??
+              textToSearch?.slice(0, 80) ?? // Use textToSearch here
+              "search";
+
+            // 4️⃣ PERSIST ONLY WHEN COMPLETED
+            if (typeof onSaveSearch === "function") {
+              try {
+                // Pass textToSearch, not 'prompt' state (which might be stale)
+                onSaveSearch(queryRole, mapped, textToSearch);
+              } catch (err) {
+                console.warn("onSaveSearch failed:", err);
+              }
+            }
+
+            // small UX delay
+            setTimeout(() => {
+              // setCandidates(mapped); // Assuming your external state handles this via onCompleted/prop
+              setCandidates(mapped); // Or set directly if props allow
+              setLoading(false);
+              setLoadingStep(loadingSteps.length - 1);
+              setCurrentPage(1);
+            }, 400);
+          }
+        } catch (err) {
+          console.error("Polling error:", err);
+          if (pollInterval) clearInterval(pollInterval);
+          clearInterval(stepInterval);
+          setLoading(false);
+        }
+      }, 2500); // ⏱ poll every 2.5s
+    } catch (e) {
+      console.error("handleSearch error:", e);
+      clearInterval(stepInterval);
+      if (pollInterval) clearInterval(pollInterval);
+      setLoading(false);
+    }
+  };
+
   const confirmSearch = () => {
     if (!prompt.trim()) return;
     setShowCreditWarning(true);
   };
 
-  // Replace your existing handleSearch with this version and add the helper below.
+  // --- MODIFIED: PDF Upload Logic ---
+  const handlePdfUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    // Validate file type
+    if (file.type !== "application/pdf") {
+      setPdfError("Please upload a PDF file only.");
+      if (fileInputRef.current) fileInputRef.current.value = "";
+      return;
+    }
+
+    setPdfExtracting(true);
+    setPdfError(null);
+
+    try {
+      // Convert file to ArrayBuffer
+      const arrayBuffer = await file.arrayBuffer();
+
+      // Load PDF document
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+
+      let extractedText = "";
+
+      // Extract text from all pages
+      for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+        const page = await pdf.getPage(pageNum);
+        const textContent = await page.getTextContent();
+        const pageText = textContent.items
+          .map((item: any) => item.str)
+          .join(" ");
+        extractedText += pageText + " ";
+      }
+
+      // Clean up extracted text
+      extractedText = extractedText.trim();
+
+      if (!extractedText) {
+        setPdfError("No text could be extracted from this PDF.");
+        setPdfExtracting(false);
+        if (fileInputRef.current) fileInputRef.current.value = "";
+        return;
+      }
+
+      // 1. Update UI
+      setPrompt(extractedText);
+      setPdfExtracting(false);
+
+      // Close modal if it's open
+      setShowJdModal(false);
+
+      // Reset input
+      if (fileInputRef.current) fileInputRef.current.value = "";
+
+      // 2. 🔥 Trigger Search Immediately with extracted text
+      // We pass the text directly to avoid stale state issues
+      handleSearch(extractedText);
+
+    } catch (error) {
+      console.error("PDF extraction error:", error);
+      setPdfError("Failed to extract text from PDF. Please try another file.");
+      setPdfExtracting(false);
+      if (fileInputRef.current) fileInputRef.current.value = "";
+    }
+  };
+
+  // Open JD modal instead of directly triggering file picker
+  const handleUploadClick = () => {
+    setShowJdModal(true);
+  };
+
+  // Handle manual paste JD search from modal
+  const handlePasteJdSearch = () => {
+    if (!jdText.trim()) return;
+    setPrompt(jdText);
+    setShowJdModal(false);
+    setJdText("");
+    // Auto-trigger search after a brief delay
+    setTimeout(() => {
+      handleSearch(jdText);
+    }, 100);
+  };
+
+  // Trigger file picker from modal
+  const handleModalUploadClick = () => {
+    fileInputRef.current?.click();
+  };
 
   const mapApiResultToCandidate = (r: any): Candidate => {
     // defensive mapping with fallbacks
@@ -216,6 +460,8 @@ export const ProjectView: React.FC<ProjectViewProps> = ({
 
   const [searchQuery, setSearchQuery] = useState<string | null>(null);
 
+  // Note: You have both useAsyncSearch AND manual handleSearch polling. 
+  // handleSearch seems to be the one used by the UI interactions currently.
   const { status, progress, isSearching } = useAsyncSearch({
     query: searchQuery,
     onCompleted: (candidates) => {
@@ -228,136 +474,6 @@ export const ProjectView: React.FC<ProjectViewProps> = ({
       setLoading(false);
     },
   });
-
-  const handleSearch = async () => {
-    setShowCreditWarning(false);
-    setLoading(true);
-    setLoadingStep(0);
-    setViewMode("search");
-    setCandidates([]);
-    setCurrentPage(1);
-    setHasSearched(true);
-
-    let stepIdx = 0;
-    const stepInterval = setInterval(() => {
-      stepIdx++;
-      if (stepIdx < loadingSteps.length) {
-        setLoadingStep(stepIdx);
-      }
-    }, 1500);
-
-    let pollInterval: NodeJS.Timeout | null = null;
-
-    try {
-      // 1️⃣ START SEARCH (async job)
-      const startResp = await searchCandidates(prompt);
-
-      if (!startResp.ok) {
-        throw new Error(`Search start failed: ${startResp.status}`);
-      }
-
-      const startJson = await startResp.json();
-      const sessionId = startJson?.session_id;
-
-      if (!sessionId) {
-        throw new Error("No session_id returned from search API");
-      }
-
-      // 2️⃣ POLL STATUS
-      pollInterval = setInterval(async () => {
-        try {
-          const statusResp = await fetch(
-            `${process.env.API_BASE}/api/search/status/${sessionId}`
-          );
-
-          if (!statusResp.ok) {
-            throw new Error("Status polling failed");
-          }
-
-          const statusJson = await statusResp.json();
-
-          // update progress if backend sends it
-          if (typeof statusJson.progress === "number") {
-            setLoadingStep(
-              Math.min(
-                loadingSteps.length - 1,
-                Math.floor((statusJson.progress / 100) * loadingSteps.length)
-              )
-            );
-          }
-
-          if (statusJson.status === "FAILED") {
-            const errorMessage =
-              statusJson.error ||
-              statusJson.message ||
-              "Search failed on server";
-
-            setSearchError(errorMessage);
-            clearInterval(stepInterval);
-            if (pollInterval) clearInterval(pollInterval);
-            setLoading(false);
-          }
-
-          // 3️⃣ COMPLETED → FETCH RESULTS
-          if (statusJson.status === "COMPLETED") {
-            if (pollInterval) clearInterval(pollInterval);
-            clearInterval(stepInterval);
-
-            const resultResp = await fetch(
-              `${process.env.API_BASE}/api/search/result/${sessionId}`
-            );
-
-            if (!resultResp.ok) {
-              throw new Error("Failed to fetch search results");
-            }
-
-            const resultJson = await resultResp.json();
-
-            const hits = resultJson?.data?.results ?? resultJson?.results ?? [];
-
-            const mapped: Candidate[] = Array.isArray(hits)
-              ? hits.map(mapApiResultToCandidate)
-              : [];
-
-            // 🔑 role name resolution (your logic preserved)
-            const queryRole =
-              resultJson?.data?.metadata?.query_role ??
-              resultJson?.data?.metadata?.parsed_query?.job_title ??
-              currentProject?.name ??
-              prompt?.slice(0, 80) ??
-              "search";
-
-            // 4️⃣ PERSIST ONLY WHEN COMPLETED
-            if (typeof onSaveSearch === "function") {
-              try {
-                onSaveSearch(queryRole, mapped, prompt);
-              } catch (err) {
-                console.warn("onSaveSearch failed:", err);
-              }
-            }
-
-            // small UX delay
-            setTimeout(() => {
-              // setCandidates(mapped);
-              setLoading(false);
-              setLoadingStep(loadingSteps.length - 1);
-              setCurrentPage(1);
-            }, 400);
-          }
-        } catch (err) {
-          console.error("Polling error:", err);
-          if (pollInterval) clearInterval(pollInterval);
-          clearInterval(stepInterval);
-          setLoading(false);
-        }
-      }, 2500); // ⏱ poll every 2.5s
-    } catch (e) {
-      console.error("handleSearch error:", e);
-      clearInterval(stepInterval);
-      if (pollInterval) clearInterval(pollInterval);
-      setLoading(false);
-    }
-  };
 
   const clearFilters = () => {
     setFilters({
@@ -437,23 +553,11 @@ export const ProjectView: React.FC<ProjectViewProps> = ({
   };
 
   const generateLinkedInMessage = (c: Candidate) => {
-    return `Hi ${
-      c.name.split(" ")[0]
-    },\n\nI came across your profile and was impressed by your work at ${
-      c.currentCompany
-    }. We're looking for a ${
-      c.title
-    } who matches your exact skillset.\n\nWould you be open to a quick chat?\n\nBest,\n[Your Name]`;
+    return `Hi ${c.name.split(" ")[0]
+      },\n\nI came across your profile and was impressed by your work at ${c.currentCompany
+      }. We're looking for a ${c.title
+      } who matches your exact skillset.\n\nWould you be open to a quick chat?\n\nBest,\n[Your Name]`;
   };
-
-  // Render Logic
-  // if (!currentProject) {
-  //   return (
-  //     <div className="h-full flex flex-col items-center justify-center text-[#6B7280]">
-  //       <p>Select or create a project to start.</p>
-  //     </div>
-  //   );
-  // }
 
   // Loader
   if (loading) {
@@ -464,20 +568,18 @@ export const ProjectView: React.FC<ProjectViewProps> = ({
             {loadingSteps.map((step, idx) => (
               <div
                 key={idx}
-                className={`flex items-center gap-4 transition-all duration-500 ${
-                  idx <= loadingStep
-                    ? "opacity-100 transform translate-x-0"
-                    : "opacity-20 transform -translate-x-4"
-                }`}
+                className={`flex items-center gap-4 transition-all duration-500 ${idx <= loadingStep
+                  ? "opacity-100 transform translate-x-0"
+                  : "opacity-20 transform -translate-x-4"
+                  }`}
               >
                 <div
-                  className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${
-                    idx < loadingStep
-                      ? "bg-[#10B981] text-white"
-                      : idx === loadingStep
+                  className={`w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0 ${idx < loadingStep
+                    ? "bg-[#10B981] text-white"
+                    : idx === loadingStep
                       ? "bg-[#4338CA] text-white animate-pulse"
                       : "bg-gray-200"
-                  }`}
+                    }`}
                 >
                   {idx < loadingStep ? (
                     <CheckCircle className="w-4 h-4" />
@@ -488,9 +590,8 @@ export const ProjectView: React.FC<ProjectViewProps> = ({
                   )}
                 </div>
                 <span
-                  className={`text-lg font-medium ${
-                    idx === loadingStep ? "text-[#111827]" : "text-[#6B7280]"
-                  }`}
+                  className={`text-lg font-medium ${idx === loadingStep ? "text-[#111827]" : "text-[#6B7280]"
+                    }`}
                 >
                   {step}
                 </span>
@@ -590,12 +691,34 @@ export const ProjectView: React.FC<ProjectViewProps> = ({
                 <button className="text-xs font-medium px-2 py-1 rounded bg-[#F7F8FA] text-[#6B7280] hover:text-[#4338CA] hover:bg-[#F3F4F6] transition-colors">
                   Add Filter
                 </button>
-                <button className="text-xs font-medium px-2 py-1 rounded bg-[#F7F8FA] text-[#6B7280] hover:text-[#4338CA] hover:bg-[#F3F4F6] transition-colors">
-                  Upload Job Doc
+                {/* Hidden file input */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".pdf,application/pdf"
+                  onChange={handlePdfUpload}
+                  className="hidden"
+                />
+                <button
+                  onClick={handleUploadClick}
+                  disabled={pdfExtracting}
+                  className="text-xs font-medium px-2 py-1 rounded bg-[#F7F8FA] text-[#6B7280] hover:text-[#4338CA] hover:bg-[#F3F4F6] transition-colors flex items-center gap-1.5 disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {pdfExtracting ? (
+                    <>
+                      <Loader2 className="w-3 h-3 animate-spin" />
+                      Extracting...
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-3 h-3" />
+                      Upload Job Doc
+                    </>
+                  )}
                 </button>
               </div>
               <button
-                onClick={confirmSearch}
+                onClick={() => confirmSearch()} // wrapped in arrow to avoid passing event
                 disabled={!prompt.trim()}
                 className="h-9 px-4 bg-[#4338CA] text-white rounded-lg text-sm font-medium hover:bg-[#312E81] transition-all shadow-md flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
               >
@@ -632,6 +755,108 @@ export const ProjectView: React.FC<ProjectViewProps> = ({
           </div>
         )}
 
+        {/* Job Description Modal */}
+        {showJdModal && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+            <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-2xl w-full">
+              {/* Header */}
+              <div className="flex items-center justify-between mb-6">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 bg-[#4338CA]/10 rounded-lg flex items-center justify-center text-[#4338CA]">
+                    <FileText className="w-5 h-5" />
+                  </div>
+                  <h3 className="text-lg font-semibold text-[#111827]">
+                    Search by Job Description
+                  </h3>
+                </div>
+                <button
+                  onClick={() => {
+                    setShowJdModal(false);
+                    setJdText("");
+                  }}
+                  className="text-[#9CA3AF] hover:text-[#111827] transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Section 1: Paste Job Description */}
+              <div className="mb-6">
+                <h4 className="text-sm font-semibold text-[#111827] mb-1">
+                  Paste Job Description
+                </h4>
+                <p className="text-xs text-[#6B7280] mb-3">
+                  Don't worry about the formatting, we'll take care of that for you
+                </p>
+                <textarea
+                  value={jdText}
+                  onChange={(e) => setJdText(e.target.value)}
+                  placeholder="Paste your job description here..."
+                  className="w-full h-48 p-3 border border-[#E5E7EB] rounded-lg resize-none outline-none text-sm text-[#111827] placeholder:text-[#9CA3AF] focus:border-[#4338CA] focus:ring-1 focus:ring-[#4338CA]"
+                />
+              </div>
+
+              {/* Divider */}
+              <div className="relative mb-6">
+                <div className="absolute inset-0 flex items-center">
+                  <div className="w-full border-t border-[#E5E7EB]"></div>
+                </div>
+                <div className="relative flex justify-center text-xs">
+                  <span className="px-2 bg-white text-[#9CA3AF]">OR</span>
+                </div>
+              </div>
+
+              {/* Section 2: Upload Job Description */}
+              <div className="mb-6">
+                <h4 className="text-sm font-semibold text-[#111827] mb-1">
+                  Upload Job Description
+                </h4>
+                <p className="text-xs text-[#6B7280] mb-3">
+                  You can upload PDF or text documents like .docx, .txt, or formatted text
+                </p>
+                <button
+                  onClick={handleModalUploadClick}
+                  disabled={pdfExtracting}
+                  className="inline-flex items-center gap-2 px-4 py-2 bg-[#F7F8FA] border border-[#E5E7EB] rounded-lg text-sm font-medium text-[#6B7280] hover:bg-[#F3F4F6] hover:text-[#4338CA] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                >
+                  {pdfExtracting ? (
+                    <>
+                      <div className="w-4 h-4 border-2 border-[#4338CA] border-t-transparent rounded-full animate-spin" />
+                      <span>Extracting...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="w-4 h-4" />
+                      <span>Upload</span>
+                    </>
+                  )}
+                </button>
+              </div>
+
+              {/* Footer Actions */}
+              <div className="flex gap-3 pt-4 border-t border-[#E5E7EB]">
+                <button
+                  onClick={() => {
+                    setShowJdModal(false);
+                    setJdText("");
+                  }}
+                  className="flex-1 py-2.5 border border-[#E5E7EB] rounded-lg text-sm font-medium text-[#6B7280] hover:bg-[#F7F8FA]"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={handlePasteJdSearch}
+                  disabled={!jdText.trim()}
+                  className="flex-1 py-2.5 bg-[#4338CA] text-white rounded-lg text-sm font-medium hover:bg-[#312E81] disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                >
+                  <span>Save & Search</span>
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {showCreditWarning && (
           <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
             <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full text-center">
@@ -653,12 +878,33 @@ export const ProjectView: React.FC<ProjectViewProps> = ({
                   Cancel
                 </button>
                 <button
-                  onClick={handleSearch}
+                  onClick={() => handleSearch()}
                   className="flex-1 py-2.5 bg-[#4338CA] text-white rounded-lg text-sm font-medium hover:bg-[#312E81]"
                 >
                   Yes, Proceed
                 </button>
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* PDF Error Modal */}
+        {pdfError && (
+          <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 animate-fade-in">
+            <div className="bg-white rounded-2xl shadow-2xl p-6 max-w-sm w-full text-center">
+              <div className="w-12 h-12 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-4 text-red-600">
+                <AlertTriangle className="w-6 h-6" />
+              </div>
+              <h3 className="text-lg font-semibold text-[#111827] mb-2">
+                PDF Upload Failed
+              </h3>
+              <p className="text-[#6B7280] text-sm mb-6">{pdfError}</p>
+              <button
+                onClick={() => setPdfError(null)}
+                className="w-full py-2.5 bg-[#4338CA] text-white rounded-lg text-sm font-medium hover:bg-[#312E81]"
+              >
+                Okay
+              </button>
             </div>
           </div>
         )}
@@ -678,11 +924,10 @@ export const ProjectView: React.FC<ProjectViewProps> = ({
                 setViewMode("search");
                 setCurrentPage(1);
               }}
-              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${
-                viewMode === "search"
-                  ? "bg-white text-[#4338CA] shadow-sm ring-1 ring-[#E5E7EB]"
-                  : "text-[#6B7280] hover:text-[#111827]"
-              }`}
+              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all ${viewMode === "search"
+                ? "bg-white text-[#4338CA] shadow-sm ring-1 ring-[#E5E7EB]"
+                : "text-[#6B7280] hover:text-[#111827]"
+                }`}
             >
               Matches
             </button>
@@ -691,11 +936,10 @@ export const ProjectView: React.FC<ProjectViewProps> = ({
                 setViewMode("shortlist");
                 setCurrentPage(1);
               }}
-              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${
-                viewMode === "shortlist"
-                  ? "bg-white text-[#4338CA] shadow-sm ring-1 ring-[#E5E7EB]"
-                  : "text-[#6B7280] hover:text-[#111827]"
-              }`}
+              className={`px-4 py-1.5 rounded-md text-sm font-medium transition-all flex items-center gap-2 ${viewMode === "shortlist"
+                ? "bg-white text-[#4338CA] shadow-sm ring-1 ring-[#E5E7EB]"
+                : "text-[#6B7280] hover:text-[#111827]"
+                }`}
             >
               Shortlisted
               {shortlistedIds.length > 0 && (
@@ -711,11 +955,10 @@ export const ProjectView: React.FC<ProjectViewProps> = ({
           <div className="relative">
             <button
               onClick={() => setShowFilters(!showFilters)}
-              className={`h-9 px-3 rounded-lg border text-sm font-medium transition-colors flex items-center gap-2 ${
-                showFilters || activeFilterCount > 0
-                  ? "bg-[#F7F8FA] border-[#D1D5DB] text-[#111827]"
-                  : "bg-white border-[#E5E7EB] text-[#6B7280] hover:text-[#111827] hover:border-[#D1D5DB]"
-              }`}
+              className={`h-9 px-3 rounded-lg border text-sm font-medium transition-colors flex items-center gap-2 ${showFilters || activeFilterCount > 0
+                ? "bg-[#F7F8FA] border-[#D1D5DB] text-[#111827]"
+                : "bg-white border-[#E5E7EB] text-[#6B7280] hover:text-[#111827] hover:border-[#D1D5DB]"
+                }`}
             >
               <Filter className="w-3.5 h-3.5" />
               Filters
@@ -902,11 +1145,10 @@ export const ProjectView: React.FC<ProjectViewProps> = ({
                   <div
                     key={candidate.id}
                     className={`group bg-white rounded-xl border p-5 shadow-sm hover:shadow-lg hover:-translate-y-0.5 transition-all cursor-pointer relative overflow-hidden flex flex-col justify-between
-                        ${
-                          isSelected
-                            ? "border-[#4338CA] ring-1 ring-[#4338CA]"
-                            : "border-[#E5E7EB]"
-                        }
+                        ${isSelected
+                        ? "border-[#4338CA] ring-1 ring-[#4338CA]"
+                        : "border-[#E5E7EB]"
+                      }
                     `}
                     onClick={() => onSelectCandidate(candidate)}
                   >
@@ -931,11 +1173,10 @@ export const ProjectView: React.FC<ProjectViewProps> = ({
                         e.stopPropagation();
                         toggleShortlist(candidate.id);
                       }}
-                      className={`absolute top-4 right-4 z-10 w-8 h-8 rounded-full flex items-center justify-center transition-colors ${
-                        isShortlisted
-                          ? "bg-red-50 text-[#EF4444]"
-                          : "bg-[#F9FAFB] text-[#9CA3AF] hover:bg-[#F3F4F6] hover:text-[#6B7280]"
-                      }`}
+                      className={`absolute top-4 right-4 z-10 w-8 h-8 rounded-full flex items-center justify-center transition-colors ${isShortlisted
+                        ? "bg-red-50 text-[#EF4444]"
+                        : "bg-[#F9FAFB] text-[#9CA3AF] hover:bg-[#F3F4F6] hover:text-[#6B7280]"
+                        }`}
                       title={
                         isShortlisted
                           ? "Remove from Shortlist"
@@ -943,17 +1184,15 @@ export const ProjectView: React.FC<ProjectViewProps> = ({
                       }
                     >
                       <Heart
-                        className={`w-4 h-4 ${
-                          isShortlisted ? "fill-current" : ""
-                        }`}
+                        className={`w-4 h-4 ${isShortlisted ? "fill-current" : ""
+                          }`}
                       />
                     </button>
 
                     <div>
                       <div
-                        className={`flex items-start gap-4 mb-4 ${
-                          viewMode === "shortlist" ? "pl-6" : ""
-                        }`}
+                        className={`flex items-start gap-4 mb-4 ${viewMode === "shortlist" ? "pl-6" : ""
+                          }`}
                       >
                         <div className="w-14 h-14 rounded-xl bg-gray-100 flex-shrink-0 overflow-hidden border border-[#E5E7EB]">
                           {candidate.avatarUrl && (
@@ -1004,13 +1243,12 @@ export const ProjectView: React.FC<ProjectViewProps> = ({
 
                       <div className="flex gap-2 mb-5">
                         <span
-                          className={`text-xs font-bold px-2 py-0.5 rounded border ${
-                            candidate.matchScore > 90
-                              ? "bg-green-50 text-[#059669] border-green-100"
-                              : candidate.matchScore > 80
+                          className={`text-xs font-bold px-2 py-0.5 rounded border ${candidate.matchScore > 90
+                            ? "bg-green-50 text-[#059669] border-green-100"
+                            : candidate.matchScore > 80
                               ? "bg-indigo-50 text-[#4338CA] border-indigo-100"
                               : "bg-yellow-50 text-[#D97706] border-yellow-100"
-                          }`}
+                            }`}
                         >
                           {candidate.matchScore}% Match
                         </span>
@@ -1059,12 +1297,14 @@ export const ProjectView: React.FC<ProjectViewProps> = ({
                           </a>
                         )}
                         {candidate.socials.github && (
-                          <button
-                            className="p-2 rounded-lg hover:bg-gray-100 text-[#9CA3AF] hover:text-[#111827] transition-colors"
-                            title="View GitHub"
+                          <a
+                            href={candidate.socials.githubUrl}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="p-1 rounded-full text-[#9CA3AF] hover:text-[#0A66C2] hover:bg-blue-50 transition-colors"
                           >
                             <Github className="w-4 h-4" />
-                          </button>
+                          </a>
                         )}
                       </div>
 
@@ -1267,11 +1507,10 @@ export const ProjectView: React.FC<ProjectViewProps> = ({
                           className="flex items-center gap-2 cursor-pointer group"
                         >
                           <div
-                            className={`w-4 h-4 rounded-full border flex items-center justify-center ${
-                              outreachCandidate.outreachStatus === status
-                                ? "border-[#4338CA] bg-[#4338CA]"
-                                : "border-[#D1D5DB] bg-white"
-                            }`}
+                            className={`w-4 h-4 rounded-full border flex items-center justify-center ${outreachCandidate.outreachStatus === status
+                              ? "border-[#4338CA] bg-[#4338CA]"
+                              : "border-[#D1D5DB] bg-white"
+                              }`}
                           >
                             {outreachCandidate.outreachStatus === status && (
                               <Check className="w-2.5 h-2.5 text-white" />
@@ -1311,21 +1550,19 @@ export const ProjectView: React.FC<ProjectViewProps> = ({
                   <div className="flex gap-6">
                     <button
                       onClick={() => setOutreachMode("LINKEDIN")}
-                      className={`text-sm font-semibold pb-4 -mb-4 border-b-2 transition-colors ${
-                        outreachMode === "LINKEDIN"
-                          ? "border-[#4338CA] text-[#4338CA]"
-                          : "border-transparent text-[#9CA3AF] hover:text-[#6B7280]"
-                      }`}
+                      className={`text-sm font-semibold pb-4 -mb-4 border-b-2 transition-colors ${outreachMode === "LINKEDIN"
+                        ? "border-[#4338CA] text-[#4338CA]"
+                        : "border-transparent text-[#9CA3AF] hover:text-[#6B7280]"
+                        }`}
                     >
                       LinkedIn Message
                     </button>
                     <button
                       onClick={() => setOutreachMode("MAIL")}
-                      className={`text-sm font-semibold pb-4 -mb-4 border-b-2 transition-colors ${
-                        outreachMode === "MAIL"
-                          ? "border-[#4338CA] text-[#4338CA]"
-                          : "border-transparent text-[#9CA3AF] hover:text-[#6B7280]"
-                      }`}
+                      className={`text-sm font-semibold pb-4 -mb-4 border-b-2 transition-colors ${outreachMode === "MAIL"
+                        ? "border-[#4338CA] text-[#4338CA]"
+                        : "border-transparent text-[#9CA3AF] hover:text-[#6B7280]"
+                        }`}
                     >
                       Email Sequence
                     </button>
@@ -1386,7 +1623,7 @@ export const ProjectView: React.FC<ProjectViewProps> = ({
                         </label>
                         <input
                           type="text"
-                          defaultValue={`Role at ${currentProject.name}`}
+                          defaultValue={`Role at ${currentProject?.name}`}
                           className="w-full bg-white border border-[#E5E7EB] rounded-lg px-3 py-2 text-sm font-medium focus:outline-none focus:border-[#4338CA]"
                         />
                       </div>
@@ -1396,11 +1633,9 @@ export const ProjectView: React.FC<ProjectViewProps> = ({
                         </label>
                         <textarea
                           className="w-full h-48 p-4 bg-white border border-[#E5E7EB] rounded-xl text-sm text-[#111827] leading-relaxed focus:outline-none focus:ring-2 focus:ring-[#4338CA]/20 focus:border-[#4338CA] resize-none"
-                          defaultValue={`Hi ${
-                            outreachCandidate.name.split(" ")[0]
-                          },\n\nI'm recruiting for a ${
-                            outreachCandidate.title
-                          } position and your background stood out to me.\n\nLet's chat?`}
+                          defaultValue={`Hi ${outreachCandidate.name.split(" ")[0]
+                            },\n\nI'm recruiting for a ${outreachCandidate.title
+                            } position and your background stood out to me.\n\nLet's chat?`}
                         />
                       </div>
                       <div className="flex justify-end pt-2">

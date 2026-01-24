@@ -71,6 +71,7 @@ export interface Candidate {
     github?: boolean;
     behance?: boolean;
     linkedinUrl?: string;
+    githubUrl?: string;
   };
   insights: SaralInsights;
   outreachStatus: OutreachStatus;
